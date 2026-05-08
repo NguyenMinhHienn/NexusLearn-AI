@@ -1,0 +1,30 @@
+.doc-actions { display: flex; gap: 12px; margin: 20px 0 24px; }
+
+.overall-progress { margin-bottom: 32px; }
+.progress-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+
+.concept-group { margin-bottom: 28px; }
+.concept-group h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+
+.concepts-list { display: flex; flex-direction: column; gap: 8px; }
+
+.concept-item {
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.concept-item:hover { border-color: var(--primary); }
+
+.concept-header {
+  display: flex; align-items: center; gap: 12px;
+}
+.concept-name { font-weight: 600; font-size: 15px; flex: 1; }
+
+.chevron { transition: transform 0.2s; color: var(--text-muted); }
+.chevron.rotated { transform: rotate(90deg); }
+
+.concept-detail {
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+}

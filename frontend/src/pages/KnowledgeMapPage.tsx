@@ -1,45 +1,40 @@
-import { useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  Node,
-  Edge,
-  useNodesState,
-  useEdgesState,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
-import { ArrowLeft } from 'lucide-react'
+import axios from 'axios'
+import { ArrowLeft, Flag, Check, Lock } from 'lucide-react'
 import './KnowledgeMapPage.css'
-
-// Mock knowledge graph data
-const initialNodes: Node[] = [
-  { id: '1', data: { label: '🟢 Array' }, position: { x: 50, y: 0 }, style: { background: '#065f46', border: '2px solid #10b981', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '2', data: { label: '🟢 Linked List' }, position: { x: 300, y: 0 }, style: { background: '#065f46', border: '2px solid #10b981', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '3', data: { label: '🟡 Stack' }, position: { x: 50, y: 120 }, style: { background: '#78350f', border: '2px solid #f59e0b', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '4', data: { label: '🟡 Queue' }, position: { x: 300, y: 120 }, style: { background: '#78350f', border: '2px solid #f59e0b', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '5', data: { label: '⬜ Binary Tree' }, position: { x: 550, y: 120 }, style: { background: '#1e293b', border: '2px solid #64748b', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '6', data: { label: '⬜ BST' }, position: { x: 550, y: 250 }, style: { background: '#1e293b', border: '2px solid #64748b', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '7', data: { label: '⬜ Hash Table' }, position: { x: 175, y: 250 }, style: { background: '#1e293b', border: '2px solid #64748b', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-  { id: '8', data: { label: '🔴 Graph' }, position: { x: 350, y: 380 }, style: { background: '#7f1d1d', border: '2px solid #ef4444', color: '#fff', borderRadius: 12, padding: '12px 20px', fontWeight: 600 } },
-]
-
-const initialEdges: Edge[] = [
-  { id: 'e1-3', source: '1', target: '3', label: 'dùng để triển khai', style: { stroke: '#64748b' }, animated: true },
-  { id: 'e2-4', source: '2', target: '4', label: 'dùng để triển khai', style: { stroke: '#64748b' }, animated: true },
-  { id: 'e1-7', source: '1', target: '7', label: 'liên quan', style: { stroke: '#334155' } },
-  { id: 'e2-5', source: '2', target: '5', label: 'cần hiểu trước', style: { stroke: '#334155' } },
-  { id: 'e5-6', source: '5', target: '6', label: 'mở rộng', style: { stroke: '#64748b' }, animated: true },
-  { id: 'e5-8', source: '5', target: '8', label: 'nền tảng cho', style: { stroke: '#334155' } },
-  { id: 'e7-8', source: '7', target: '8', label: 'kết hợp', style: { stroke: '#334155' } },
-]
 
 export default function KnowledgeMapPage() {
   const { id } = useParams()
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [docData, setDocData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    axios.get(`/api/documents/${id}`)
+      .then(res => setDocData(res.data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
+  }, [id])
+
+  if (loading) return <div className="knowledge-map-page fade-in">Đang tải bản đồ...</div>
+  if (!docData || !docData.document) return <div className="knowledge-map-page fade-in">Không tìm thấy tài liệu</div>
+
+  const doc = docData.document;
+  const concepts = docData.concepts || [];
+  const levelProgress = docData.levelProgress || { basic: false, intermediate: false, advanced: false };
+
+  // Group concepts by level
+  const levels = [
+    { id: 'basic', label: 'Chặng 1: Cơ bản', completed: levelProgress.basic, locked: false },
+    { id: 'intermediate', label: 'Chặng 2: Trung bình', completed: levelProgress.intermediate, locked: !levelProgress.basic },
+    { id: 'advanced', label: 'Chặng 3: Nâng cao', completed: levelProgress.advanced, locked: !levelProgress.intermediate },
+  ];
+
+  // Determine current active level
+  let currentLevelId = 'basic';
+  if (levelProgress.basic && !levelProgress.intermediate) currentLevelId = 'intermediate';
+  if (levelProgress.intermediate && !levelProgress.advanced) currentLevelId = 'advanced';
+  if (levelProgress.advanced) currentLevelId = 'completed'; // all done
 
   return (
     <div className="knowledge-map-page fade-in">
@@ -47,37 +42,62 @@ export default function KnowledgeMapPage() {
         <Link to={`/app/documents/${id}`} className="btn btn-ghost btn-sm">
           <ArrowLeft size={16} /> Quay lại
         </Link>
-        <h1>Knowledge Map</h1>
+        <h1>Bản đồ Học tập: {doc.title}</h1>
         <div className="map-legend">
-          <span><span className="legend-dot" style={{ background: '#10b981' }}></span> Đã hiểu</span>
-          <span><span className="legend-dot" style={{ background: '#f59e0b' }}></span> Đang học</span>
-          <span><span className="legend-dot" style={{ background: '#64748b' }}></span> Chưa học</span>
-          <span><span className="legend-dot" style={{ background: '#ef4444' }}></span> Nâng cao</span>
+          <span><span className="legend-dot" style={{ background: '#10b981' }}></span> Đã qua</span>
+          <span><span className="legend-dot" style={{ background: '#f59e0b', boxShadow: '0 0 10px #f59e0b' }}></span> Hiện tại (Đang cắm cờ)</span>
+          <span><span className="legend-dot" style={{ background: '#334155' }}></span> Bị khóa</span>
         </div>
       </div>
 
-      <div className="map-container">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          fitView
-          attributionPosition="bottom-left"
-        >
-          <Background color="#1e293b" gap={20} />
-          <Controls />
-          <MiniMap
-            nodeColor={(n) => {
-              const border = n.style?.border as string
-              if (border?.includes('#10b981')) return '#10b981'
-              if (border?.includes('#f59e0b')) return '#f59e0b'
-              if (border?.includes('#ef4444')) return '#ef4444'
-              return '#64748b'
-            }}
-            style={{ background: '#0f0f23' }}
-          />
-        </ReactFlow>
+      <div className="game-map-container">
+        <div className="map-path-line"></div>
+        
+        {levels.map((level, index) => {
+          const levelConcepts = concepts.filter((c: any) => c.level === level.id);
+          const isCurrent = level.id === currentLevelId;
+          
+          let stateClass = 'locked';
+          if (level.completed) stateClass = 'completed';
+          if (isCurrent) stateClass = 'current';
+
+          // For layout variation
+          const alignClass = index % 2 === 0 ? 'align-left' : 'align-right';
+
+          return (
+            <div key={level.id} className={`map-level-section ${stateClass} ${alignClass}`}>
+              <div className="milestone-icon">
+                {level.completed ? <Check size={24} /> : isCurrent ? <Flag size={24} /> : <Lock size={20} />}
+              </div>
+              <div className="milestone-content">
+                <h2>{level.label}</h2>
+                {levelConcepts.length > 0 ? (
+                  <ul className="concept-tags">
+                    {levelConcepts.map((c: any) => (
+                      <li key={c.id}>{c.name}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted text-sm">Chưa có bài học</p>
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        {currentLevelId === 'completed' && (
+          <div className="map-level-section completed align-center final-milestone">
+
+                <div className="milestone-icon" style={{ background: '#f59e0b', borderColor: '#d97706' }}>
+                  <Flag size={32} color="#fff" />
+                </div>
+                <div className="milestone-content" style={{ textAlign: 'center' }}>
+                  <h2>🎉 Chúc mừng!</h2>
+                  <p>Bạn đã hoàn thành 100% tài liệu này.</p>
+                </div>
+          </div>
+        )}
+        
       </div>
     </div>
   )

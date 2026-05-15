@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import axios from 'axios'
-
-// ⚡ DEV_MODE: false = gọi API thật
 const DEV_MODE = false
 
 interface User {
@@ -9,6 +7,9 @@ interface User {
   email: string
   name: string
   avatar_url?: string
+  role: 'user' | 'admin'
+  token_quota: number
+  tokens_used: number
 }
 
 interface AuthContextType {
@@ -32,21 +33,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('studymate_user')
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
+    const initializeAuth = async () => {
+      const token = localStorage.getItem('token')
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+        try {
+          const res = await axios.get('/api/auth/me')
+          setUser(res.data.user)
+        } catch (error) {
+          console.error('Lỗi xác thực token:', error)
+          localStorage.removeItem('token')
+          delete axios.defaults.headers.common['Authorization']
+        }
+      }
+      setLoading(false)
     }
-    setLoading(false)
+    initializeAuth()
   }, [])
 
   const login = async (email: string, password: string) => {
-    if (DEV_MODE) {
-      // Mock login — chấp nhận mọi email/password
-      const mockUser: User = { id: 1, email, name: email.split('@')[0] }
-      localStorage.setItem('studymate_user', JSON.stringify(mockUser))
-      setUser(mockUser)
-      return
-    }
     const res = await axios.post('/api/auth/login', { email, password })
     const { token, user } = res.data
     localStorage.setItem('token', token)
@@ -55,13 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (name: string, email: string, password: string) => {
-    if (DEV_MODE) {
-      // Mock register
-      const mockUser: User = { id: 1, email, name }
-      localStorage.setItem('studymate_user', JSON.stringify(mockUser))
-      setUser(mockUser)
-      return
-    }
     const res = await axios.post('/api/auth/register', { name, email, password })
     const { token, user } = res.data
     localStorage.setItem('token', token)

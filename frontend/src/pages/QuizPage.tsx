@@ -1,46 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, CheckCircle, XCircle, ArrowRight } from 'lucide-react'
 import './QuizPage.css'
 
-const mockQuiz = [
-  {
-    id: 1,
-    question: 'Array và Linked List khác nhau cơ bản ở điểm nào?',
-    options: [
-      'A. Array lưu trữ liên tiếp trong bộ nhớ, Linked List lưu rời rạc',
-      'B. Array không thể thêm phần tử, Linked List thì có thể',
-      'C. Linked List nhanh hơn Array trong mọi trường hợp',
-      'D. Không có sự khác biệt',
-    ],
-    correctAnswer: 0,
-    explanation: 'Array lưu trữ phần tử liên tiếp (contiguous) trong bộ nhớ, còn Linked List lưu rời rạc và kết nối bằng con trỏ. Điều này ảnh hưởng đến hiệu suất truy xuất và chèn/xóa phần tử.',
-  },
-  {
-    id: 2,
-    question: 'Stack hoạt động theo nguyên tắc nào?',
-    options: ['A. FIFO', 'B. LIFO', 'C. Random Access', 'D. Priority'],
-    correctAnswer: 1,
-    explanation: 'Stack (ngăn xếp) hoạt động theo LIFO - Last In, First Out. Phần tử được thêm vào cuối cùng sẽ được lấy ra đầu tiên, giống như chồng đĩa.',
-  },
-  {
-    id: 3,
-    question: 'Độ phức tạp tìm kiếm trong Binary Search Tree (trung bình) là?',
-    options: ['A. O(1)', 'B. O(n)', 'C. O(log n)', 'D. O(n²)'],
-    correctAnswer: 2,
-    explanation: 'BST cho phép tìm kiếm với O(log n) trung bình vì mỗi bước so sánh loại bỏ được một nửa cây. Tuy nhiên worst case (cây suy biến) có thể là O(n).',
-  },
-]
-
 export default function QuizPage() {
   const { id } = useParams()
+  const [quizData, setQuizData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [currentQ, setCurrentQ] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [score, setScore] = useState(0)
   const [finished, setFinished] = useState(false)
 
-  const quiz = mockQuiz[currentQ]
+  useEffect(() => {
+    axios.get(`/api/documents/${id}/quiz`)
+      .then(res => setQuizData(res.data))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false))
+  }, [id])
+
+  if (loading) return <div className="quiz-page fade-in">Đang tải câu hỏi...</div>
+  if (!quizData || quizData.length === 0) return <div className="quiz-page fade-in">Không có câu hỏi nào cho tài liệu này.</div>
+
+  const quiz = {
+    ...quizData[currentQ],
+    correctAnswer: quizData[currentQ].correct_answer
+  }
 
   const handleSelect = (idx: number) => {
     if (showResult) return
@@ -50,7 +37,7 @@ export default function QuizPage() {
   }
 
   const handleNext = () => {
-    if (currentQ < mockQuiz.length - 1) {
+    if (currentQ < quizData.length - 1) {
       setCurrentQ(c => c + 1)
       setSelected(null)
       setShowResult(false)
@@ -60,13 +47,13 @@ export default function QuizPage() {
   }
 
   if (finished) {
-    const percent = Math.round((score / mockQuiz.length) * 100)
+    const percent = Math.round((score / quizData.length) * 100)
     return (
       <div className="quiz-page fade-in">
         <div className="quiz-result card">
           <h1>Kết quả Quiz</h1>
           <div className="result-score">{percent}%</div>
-          <p>{score}/{mockQuiz.length} câu đúng</p>
+          <p>{score}/{quizData.length} câu đúng</p>
           <p className="result-message">
             {percent >= 80 ? '🎉 Xuất sắc! Bạn đã nắm vững kiến thức.' :
              percent >= 50 ? '👍 Khá tốt! Cần ôn thêm một số phần.' :
@@ -87,14 +74,14 @@ export default function QuizPage() {
         <Link to={`/app/documents/${id}`} className="btn btn-ghost btn-sm">
           <ArrowLeft size={16} /> Quay lại
         </Link>
-        <span className="quiz-progress">Câu {currentQ + 1}/{mockQuiz.length}</span>
+        <span className="quiz-progress">Câu {currentQ + 1}/{quizData.length}</span>
       </div>
 
       <div className="quiz-card card">
         <h2 className="quiz-question">{quiz.question}</h2>
 
         <div className="quiz-options">
-          {quiz.options.map((opt, idx) => {
+          {quiz.options.map((opt: string, idx: number) => {
             let className = 'quiz-option'
             if (showResult) {
               if (idx === quiz.correctAnswer) className += ' correct'
@@ -122,7 +109,7 @@ export default function QuizPage() {
 
         {showResult && (
           <button className="btn btn-primary btn-lg quiz-next" onClick={handleNext}>
-            {currentQ < mockQuiz.length - 1 ? (
+            {currentQ < quizData.length - 1 ? (
               <>Câu tiếp theo <ArrowRight size={18} /></>
             ) : (
               <>Xem kết quả</>

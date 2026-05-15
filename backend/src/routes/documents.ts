@@ -5,26 +5,49 @@ import multer from 'multer';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { mockAnalyzeDocument } from '../services/mockAiService';
+import { geminiAnalyzeDocument } from '../services/geminiAiService';
+import { YoutubeTranscript } from 'youtube-transcript';
+import { syncUserQuota } from '../services/quotaService';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
-
-// Upload Document
 router.post('/upload', authenticateToken, upload.single('file'), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { title, textContent } = req.body;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await syncUserQuota(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const tokenQuota = user.token_quota || 0;
+    const tokensUsed = user.tokens_used || 0;
+    const ESTIMATED_COST = 1500; 
+
+    if (tokensUsed + ESTIMATED_COST > tokenQuota) {
+      return res.status(403).json({ 
+        message: 'Bạn đã hết hạn mức AI. Vui lòng liên hệ Admin để nâng cấp hoặc chờ đến chu kỳ tiếp theo.',
+        quota_exceeded: true 
+      });
+    }
+
+    const { title, textContent, youtubeUrl } = req.body;
     let extractedText = textContent || '';
     let originalFilename = 'Pasted Text';
 
-    if (req.file) {
+    if (youtubeUrl) {
+      originalFilename = 'YouTube Video';
+      try {
+        const transcript = await YoutubeTranscript.fetchTranscript(youtubeUrl);
+        extractedText = transcript.map(t => t.text).join(' ');
+      } catch (err) {
+        return res.status(400).json({ message: 'Không thể lấy phụ đề từ video này. Hãy đảm bảo video có phụ đề (CC).' });
+      }
+    } else if (req.file) {
       originalFilename = req.file.originalname;
       if (req.file.mimetype === 'application/pdf') {
         const data = await pdfParse(req.file.buffer);
         extractedText = data.text;
       } else {
-        // Tesseract OCR mock cho image (sẽ cài thật sau nếu cần)
         extractedText = 'Nội dung trích xuất từ ảnh...';
       }
     }
@@ -32,17 +55,13 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req: Aut
     if (!extractedText.trim()) {
       return res.status(400).json({ message: 'Không tìm thấy nội dung để phân tích' });
     }
-
-    // 1. Lưu Document
     const [docResult] = await pool.query<ResultSetHeader>(
       'INSERT INTO documents (user_id, title, original_filename, status) VALUES (?, ?, ?, ?)',
       [userId, title, originalFilename, 'processing']
     );
     const documentId = docResult.insertId;
-
-    // 2. Gọi AI Phân tích (Bất đồng bộ)
-    // Trong thực tế sẽ gửi vào Message Queue (như BullMQ). Ở đây gọi thẳng mock.
-    mockAnalyzeDocument(documentId, extractedText).catch(console.error);
+    await pool.query('UPDATE users SET tokens_used = tokens_used + ? WHERE id = ?', [ESTIMATED_COST, userId]);
+    geminiAnalyzeDocument(documentId, extractedText).catch(console.error);
 
     res.status(202).json({
       message: 'Tài liệu đang được phân tích',
@@ -54,14 +73,13 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req: Aut
     res.status(500).json({ message: 'Lỗi server khi upload' });
   }
 });
-
-// Lấy danh sách Documents
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const [documents] = await pool.query<RowDataPacket[]>(
       `SELECT d.*, 
-        (SELECT COUNT(*) FROM concepts c WHERE c.document_id = d.id) as concepts_count
+        (SELECT COUNT(*) FROM concepts c WHERE c.document_id = d.id) as concepts_count,
+        (SELECT COUNT(*) FROM user_level_progress p WHERE p.document_id = d.id AND p.user_id = d.user_id AND p.is_completed = 1) as completed_levels
        FROM documents d WHERE user_id = ? ORDER BY created_at DESC`,
       [userId]
     );
@@ -70,8 +88,39 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+router.get('/stats/summary', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
 
-// Lấy chi tiết Document & Concepts
+    const [docsResult] = await pool.query<RowDataPacket[]>('SELECT COUNT(id) as total_docs FROM documents WHERE user_id = ?', [userId]);
+    const totalDocs = docsResult[0].total_docs || 0;
+
+    const [conceptsResult] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(c.id) as total_concepts FROM concepts c JOIN documents d ON c.document_id = d.id WHERE d.user_id = ?`,
+      [userId]
+    );
+    const totalConcepts = conceptsResult[0].total_concepts || 0;
+
+    const [progressResult] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(p.id) as completed_levels FROM user_level_progress p JOIN documents d ON p.document_id = d.id WHERE d.user_id = ? AND p.is_completed = 1`,
+      [userId]
+    );
+    const completedLevels = progressResult[0].completed_levels || 0;
+    const totalPossibleLevels = totalDocs * 3;
+
+    const understoodPercent = totalPossibleLevels > 0 ? Math.round((completedLevels / totalPossibleLevels) * 100) : 0;
+    const needsReview = totalPossibleLevels > 0 ? totalPossibleLevels - completedLevels : 0;
+
+    res.json({
+      totalDocs,
+      totalConcepts,
+      understoodPercent,
+      needsReview
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
@@ -81,31 +130,71 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
     if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
 
     const [concepts] = await pool.query<RowDataPacket[]>('SELECT * FROM concepts WHERE document_id = ?', [docId]);
-
-    // Trả về kèm mock status học tập
     const conceptsWithStatus = concepts.map(c => ({
       ...c,
-      status: 'not_started' // Sẽ join với bảng user_concept_progress trong thực tế
+      status: 'not_started'
     }));
+
+    const [progressRows] = await pool.query<RowDataPacket[]>('SELECT level, is_completed FROM user_level_progress WHERE document_id = ? AND user_id = ?', [docId, userId]);
+    const levelProgress = { basic: false, intermediate: false, advanced: false };
+    for (const row of progressRows) {
+      levelProgress[row.level as keyof typeof levelProgress] = !!row.is_completed;
+    }
 
     res.json({
       document: docs[0],
-      concepts: conceptsWithStatus
+      concepts: conceptsWithStatus,
+      levelProgress
     });
 
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
-
-// Lấy câu hỏi Quiz
 router.get('/:id/quiz', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     const [questions] = await pool.query<RowDataPacket[]>('SELECT * FROM quiz_questions WHERE document_id = ?', [docId]);
-    res.json(questions);
+    const parsedQuestions = questions.map(q => ({
+      ...q,
+      options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+    }));
+    res.json(parsedQuestions);
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+router.post('/:id/levels/:level/complete', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id, level } = req.params;
+    const userId = req.user?.id;
+    const validLevels = ['basic', 'intermediate', 'advanced'];
+    
+    if (!validLevels.includes(level)) return res.status(400).json({ message: 'Invalid level' });
+
+    await pool.query(
+      `INSERT INTO user_level_progress (user_id, document_id, level, is_completed)
+       VALUES (?, ?, ?, TRUE)
+       ON DUPLICATE KEY UPDATE is_completed = TRUE`,
+      [userId, id, level]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    const userId = req.user?.id;
+    const [docs] = await pool.query<RowDataPacket[]>('SELECT id FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
+    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu hoặc không có quyền' });
+    await pool.query('DELETE FROM documents WHERE id = ?', [docId]);
+
+    res.json({ message: 'Đã xóa tài liệu thành công' });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server khi xóa tài liệu' });
   }
 });
 

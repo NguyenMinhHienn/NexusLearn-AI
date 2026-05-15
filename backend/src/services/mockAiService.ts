@@ -1,9 +1,6 @@
 import pool from '../config/db';
 import { ResultSetHeader } from 'mysql2';
-
-// Hàm giả lập quy trình OpenAI sinh ra dữ liệu từ Text
 export const mockAnalyzeDocument = async (documentId: number, documentText: string) => {
-  // Giả sử sau khi gọi OpenAI, ta nhận được cấu trúc JSON như sau:
   const mockConcepts = [
     { name: 'Cơ bản về ' + documentText.substring(0, 10), level: 'basic', summary: 'Định nghĩa cơ bản về chủ đề.' },
     { name: 'Cấu trúc mảng', level: 'basic', summary: 'Mảng lưu trữ liên tiếp.' },
@@ -12,8 +9,6 @@ export const mockAnalyzeDocument = async (documentId: number, documentText: stri
   ];
 
   const conceptIds: number[] = [];
-
-  // Lưu concepts vào DB
   for (const concept of mockConcepts) {
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO concepts (document_id, name, level, summary) VALUES (?, ?, ?, ?)',
@@ -21,16 +16,12 @@ export const mockAnalyzeDocument = async (documentId: number, documentText: stri
     );
     conceptIds.push(result.insertId);
   }
-
-  // Giả lập concept relationships
   if (conceptIds.length >= 4) {
     await pool.query(
       'INSERT INTO concept_relationships (source_concept_id, target_concept_id, label) VALUES (?, ?, ?), (?, ?, ?)',
       [conceptIds[0], conceptIds[1], 'liên quan', conceptIds[1], conceptIds[2], 'cần hiểu trước']
     );
   }
-
-  // Giả lập câu hỏi trắc nghiệm
   const mockQuiz = [
     {
       question: 'Phát biểu nào đúng về Mảng?',
@@ -52,7 +43,5 @@ export const mockAnalyzeDocument = async (documentId: number, documentText: stri
       [documentId, quiz.question, quiz.options, quiz.correct_answer, quiz.explanation]
     );
   }
-
-  // Cập nhật trạng thái document thành 'analyzed'
   await pool.query('UPDATE documents SET status = ? WHERE id = ?', ['analyzed', documentId]);
 };

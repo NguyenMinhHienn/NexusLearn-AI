@@ -9,11 +9,21 @@ import UploadPage from './pages/UploadPage'
 import DocumentPage from './pages/DocumentPage'
 import KnowledgeMapPage from './pages/KnowledgeMapPage'
 import QuizPage from './pages/QuizPage'
+import AdminDashboard from './pages/AdminDashboard'
+import ChatBot from './components/ChatBot'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode, requireAdmin?: boolean }) {
   const { user, loading } = useAuth()
+  
   if (loading) return <div className="loading-screen">Đang tải...</div>
   if (!user) return <Navigate to="/login" />
+  if (user.role === 'admin' && !requireAdmin) {
+    return <Navigate to="/app/admin" />
+  }
+  if (user.role === 'user' && requireAdmin) {
+    return <Navigate to="/app" />
+  }
+
   return <>{children}</>
 }
 
@@ -21,24 +31,28 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Public routes */}
+        
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* Protected routes */}
-        <Route path="/app" element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }>
+        
+        <Route path="/app" element={<ProtectedRoute requireAdmin={false}><MainLayout /></ProtectedRoute>}>
           <Route index element={<DashboardPage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="documents/:id" element={<DocumentPage />} />
           <Route path="documents/:id/map" element={<KnowledgeMapPage />} />
           <Route path="documents/:id/quiz" element={<QuizPage />} />
         </Route>
+
+        
+        <Route path="/app/admin" element={<ProtectedRoute requireAdmin={true}><MainLayout /></ProtectedRoute>}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminDashboard />} />
+          <Route path="settings" element={<AdminDashboard />} />
+        </Route>
       </Routes>
+      <ChatBot />
     </AuthProvider>
   )
 }

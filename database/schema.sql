@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(100) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
+  role ENUM('user', 'admin') DEFAULT 'user',
+  token_quota INT DEFAULT 10000,
+  tokens_used INT DEFAULT 0,
+  last_quota_reset TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -63,3 +67,16 @@ CREATE TABLE IF NOT EXISTS user_concept_progress (
   FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE,
   UNIQUE KEY unique_user_concept (user_id, concept_id)
 );
+
+-- Bảng Cấu hình hệ thống (Settings)
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key VARCHAR(50) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  description TEXT
+);
+
+-- Thêm cấu hình mặc định
+INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
+('default_token_quota', '10000', 'Hạn mức token mặc định cho user mới đăng ký'),
+('quota_reset_period', '24', 'Thời gian tự động hồi hạn mức (giờ). Đặt 0 để tắt.'),
+('openai_api_key', '', 'Khóa API của OpenAI (Bỏ trống sẽ dùng mặc định của hệ thống)');

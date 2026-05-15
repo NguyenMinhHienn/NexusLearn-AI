@@ -1,14 +1,15 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Upload, FileText, Image, Type, X, Loader } from 'lucide-react'
+import { Upload, FileText, Image, Type, X, Loader, Youtube } from 'lucide-react'
 import './UploadPage.css'
 
 export default function UploadPage() {
-  const [activeTab, setActiveTab] = useState<'file' | 'text'>('file')
+  const [activeTab, setActiveTab] = useState<'file' | 'text' | 'youtube'>('file')
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [textContent, setTextContent] = useState('')
+  const [youtubeUrl, setYoutubeUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -22,29 +23,29 @@ export default function UploadPage() {
   }
 
   const handleSubmit = async () => {
-    if (!file && !textContent) return;
+    if (!file && !textContent && !youtubeUrl) return;
     setUploading(true);
-    
+
     try {
       const formData = new FormData();
       formData.append('title', title);
       if (file) formData.append('file', file);
       if (textContent) formData.append('textContent', textContent);
+      if (youtubeUrl) formData.append('youtubeUrl', youtubeUrl);
 
       const res = await axios.post('/api/documents/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
-      
-      // Chờ mock AI xử lý xong (tầm 1 giây) rồi chuyển trang
       setTimeout(() => {
         navigate(`/app`);
       }, 1000);
-      
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Upload failed', error);
-      alert('Upload thất bại!');
+      const errorMsg = error.response?.data?.message || 'Upload thất bại!';
+      alert(errorMsg);
       setUploading(false);
     }
   }
@@ -54,7 +55,7 @@ export default function UploadPage() {
       <h1>Upload tài liệu</h1>
       <p className="text-muted">Upload PDF, ảnh, hoặc paste text bài giảng để AI phân tích</p>
 
-      {/* Title */}
+      
       <div className="input-group" style={{ marginTop: 24, maxWidth: 500 }}>
         <label>Tiêu đề tài liệu</label>
         <input
@@ -65,17 +66,20 @@ export default function UploadPage() {
         />
       </div>
 
-      {/* Tabs */}
+      
       <div className="upload-tabs">
         <button className={`upload-tab ${activeTab === 'file' ? 'active' : ''}`} onClick={() => setActiveTab('file')}>
-          <Upload size={16} /> Upload file
+          <Upload size={16} /> Upload File / Hình ảnh
         </button>
         <button className={`upload-tab ${activeTab === 'text' ? 'active' : ''}`} onClick={() => setActiveTab('text')}>
-          <Type size={16} /> Paste text
+          <Type size={16} /> Paste Text
+        </button>
+        <button className={`upload-tab ${activeTab === 'youtube' ? 'active' : ''}`} onClick={() => setActiveTab('youtube')}>
+          <Youtube size={16} /> Link YouTube
         </button>
       </div>
 
-      {/* File upload */}
+      
       {activeTab === 'file' && (
         <div
           className={`drop-zone ${dragOver ? 'drag-over' : ''} ${file ? 'has-file' : ''}`}
@@ -110,7 +114,7 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Text paste */}
+      
       {activeTab === 'text' && (
         <textarea
           className="input text-area"
@@ -121,12 +125,31 @@ export default function UploadPage() {
         />
       )}
 
-      {/* Submit */}
+      
+      {activeTab === 'youtube' && (
+        <div className="youtube-input-area">
+          <div className="input-group">
+            <label>Link Video YouTube</label>
+            <input
+              type="url"
+              className="input"
+              placeholder="https://www.youtube.com/watch?v=..."
+              value={youtubeUrl}
+              onChange={e => setYoutubeUrl(e.target.value)}
+            />
+          </div>
+          <p className="text-muted" style={{ fontSize: 13, marginTop: 12 }}>
+
+          </p>
+        </div>
+      )}
+
+      
       <button
         className="btn btn-primary btn-lg"
         style={{ marginTop: 24 }}
         onClick={handleSubmit}
-        disabled={uploading || (!file && !textContent) || !title}
+        disabled={uploading || (!file && !textContent && !youtubeUrl) || !title}
       >
         {uploading ? (
           <>

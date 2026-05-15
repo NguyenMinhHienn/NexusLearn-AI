@@ -28,7 +28,19 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-split-left">
+        <div className="landing-bg-elements">
+          <div className="blob-1"></div>
+          <div className="blob-2"></div>
+        </div>
+        <div className="auth-illustration">
+          <Brain size={80} color="var(--primary)" style={{ marginBottom: 24, animation: 'float 6s ease-in-out infinite' }} />
+          <h2>Khám phá Tri thức</h2>
+          <p>Tham gia cùng hàng ngàn học sinh đang học tập thông minh hơn mỗi ngày cùng StudyMate AI.</p>
+        </div>
+      </div>
+      <div className="auth-split-right">
+        <div className="auth-card">
         <div className="auth-header">
           <Brain size={32} className="auth-logo" />
           <h1>Đăng nhập</h1>
@@ -77,8 +89,7 @@ export default function LoginPage() {
           Chưa có tài khoản? <Link to="/register">Đăng ký miễn phí</Link>
         </p>
       </div>
-
-      <div className="auth-glow"></div>
+      </div>
     </div>
   )
 }

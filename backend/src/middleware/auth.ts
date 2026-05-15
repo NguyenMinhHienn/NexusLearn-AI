@@ -8,6 +8,9 @@ export interface AuthRequest extends Request {
     id: number;
     email: string;
     name: string;
+    role: string;
+    token_quota: number;
+    tokens_used: number;
   };
 }
 

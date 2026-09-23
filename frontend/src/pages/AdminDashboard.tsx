@@ -113,7 +113,7 @@ export default function AdminDashboard() {
           <p className="text-muted">
             {activeTab === 'analytics' && 'Thống kê hoạt động và tiêu thụ Token AI'}
             {activeTab === 'users' && 'Quản lý tài khoản và cấp hạn mức AI Token'}
-            {activeTab === 'settings' && 'Thay đổi các tham số cốt lõi của StudyMate'}
+            {activeTab === 'settings' && 'Thay đổi các tham số cốt lõi của NexusLearn'}
           </p>
         </div>
       </div>
@@ -241,7 +241,7 @@ export default function AdminDashboard() {
               <div className="card">
                 <div style={{ marginBottom: 24 }}>
                   <h3 style={{ margin: '0 0 8px 0' }}>Cấu hình hệ thống</h3>
-                  <p className="text-muted" style={{ fontSize: 14 }}>Thay đổi các tham số hoạt động cốt lõi của StudyMate.</p>
+                  <p className="text-muted" style={{ fontSize: 14 }}>Thay đổi các tham số hoạt động cốt lõi của NexusLearn.</p>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

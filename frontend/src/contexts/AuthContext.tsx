@@ -18,6 +18,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -67,15 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }
 
+  const refreshUser = async () => {
+    try {
+      const res = await axios.get('/api/auth/me')
+      setUser(res.data.user)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const logout = () => {
     localStorage.removeItem('token')
-    localStorage.removeItem('studymate_user')
+    localStorage.removeItem('nexuslearn_user')
     delete axios.defaults.headers.common['Authorization']
     setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

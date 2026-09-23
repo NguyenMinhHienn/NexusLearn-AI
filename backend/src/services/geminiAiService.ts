@@ -64,8 +64,8 @@ export const geminiAnalyzeDocument = async (documentId: number, documentText: st
     };
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-flash-latest",
-      systemInstruction: "Bạn là một trợ lý giáo dục tạo khóa học E-learning. Hãy TÓM TẮT ĐẠI Ý thật ngắn gọn, tuyệt đối không viết dài dòng. Nếu bạn viết quá dài, hệ thống sẽ bị sập. Chỉ tập trung vào những khái niệm cốt lõi nhất.",
+      model: "gemini-2.5-flash",
+      systemInstruction: "Bạn là một trợ lý giáo dục tạo khóa học E-learning chuyên nghiệp. Hãy phân tích tài liệu đầu vào một cách thật chi tiết, sâu sắc, và toàn diện. Chia kiến thức thành 3 chặng (Nền tảng, Nâng cao, Chuyên sâu). Mỗi chặng cần có nội dung giảng giải cặn kẽ, ví dụ minh họa rõ ràng để người học dễ hiểu nhất. Đừng tóm tắt quá sơ sài.",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -84,11 +84,11 @@ Nhiệm vụ của bạn là phân tích tài liệu và tạo ra một khóa h�
 Lưu ý quan trọng BẮT BUỘC tuân thủ:
 - TÀI LIỆU CÓ THỂ RẤT DÀI, HÃY PHÂN TÍCH TOÀN BỘ NỘI DUNG TỪ ĐẦU ĐẾN CUỐI VÀ KHÔNG ĐƯỢC BỎ SÓT.
 - BẮT BUỘC PHẢI CÓ ĐỦ CẢ 3 LEVEL: "basic", "intermediate", "advanced" trong cả bài học và trắc nghiệm.
-- TẠO ĐÚNG 2 BÀI HỌC (concepts) cho MỖI LEVEL. Tổng cộng đúng 6 bài học.
-- TẠO ĐÚNG 2 CÂU HỎI TRẮC NGHIỆM cho MỖI LEVEL. Tổng cộng đúng 6 câu hỏi. Các câu hỏi phải nâng dần độ khó: Basic (Dễ, cơ bản) -> Intermediate (Trung bình) -> Advanced (Khó, suy luận, mở rộng kiến thức).
-- BẮT BUỘC viết 'summary' CHẤT LƯỢNG CAO, khoảng 250-350 từ cho mỗi bài học (để đủ chi tiết như lần trước). BẮT BUỘC sử dụng ký tự xuống dòng (\\n) để phân tách các đoạn văn.
-- TRUYỆT ĐỐI KHÔNG SỬ DỤNG DẤU NGOẶC KÉP (") bên trong phần summary (để không làm hỏng cấu trúc JSON). Nếu cần, hãy dùng dấu nháy đơn (') hoặc dấu backtick (\`). TRUYỆT ĐỐI KHÔNG VIẾT QUÁ DÀI. Lấy các ý chính yếu nhất xuyên suốt tài liệu.
-- Đảm bảo tạo ra 4-6 mối quan hệ (relationships) giữa các bài học để liên kết kiến thức.
+- TẠO 2-3 BÀI HỌC (concepts) cho MỖI LEVEL. Tổng cộng khoảng 6-9 bài học.
+- TẠO 2-3 CÂU HỎI TRẮC NGHIỆM cho MỖI LEVEL. Tổng cộng khoảng 6-9 câu hỏi. Tránh các câu hỏi học thuộc lòng nhàm chán. Hãy tạo các câu hỏi tình huống, suy luận logic, phân tích sâu. Nâng dần độ khó một cách rõ rệt.
+- BẮT BUỘC viết 'summary' CHẤT LƯỢNG, thật chi tiết, khoảng 200-300 từ cho mỗi bài học. Hãy giải thích cặn kẽ như một người thầy tâm huyết, kèm theo ví dụ cụ thể, dễ hiểu. BẮT BUỘC sử dụng ký tự xuống dòng (\\n) để phân tách các đoạn văn, danh sách.
+- TUYỆT ĐỐI KHÔNG SỬ DỤNG DẤU NGOẶC KÉP (") bên trong phần summary và quiz (để không làm hỏng cấu trúc JSON). Nếu cần, hãy dùng dấu nháy đơn (') hoặc dấu backtick (\`).
+- Đảm bảo tạo ra 6-8 mối quan hệ (relationships) logic và chặt chẽ giữa các bài học để liên kết kiến thức.
 
 Nội dung tài liệu (Hãy đọc toàn bộ):
 ${truncatedText}
@@ -168,5 +168,91 @@ ${truncatedText}
   } catch (error) {
     console.error('Lỗi khi gọi Gemini AI:', error);
     await pool.query('UPDATE documents SET status = ? WHERE id = ?', ['failed', documentId]);
+  }
+};
+
+export const geminiChatWithDocument = async (documentContext: string, userMessage: string, chatHistory: { role: string, text: string }[] = []) => {
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
+  
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction: `Bạn là Gia Sư Ảo AI (Virtual Tutor) chuyên nghiệp của ứng dụng NexusLearn.
+Nhiệm vụ của bạn:
+1. Giải đáp thắc mắc của học sinh chủ yếu dựa trên TÀI LIỆU được cung cấp bên dưới.
+2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế.
+3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
+4. YÊU CẦU ĐẶC BIỆT: Phải luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo. Dù học sinh có nói tục, chửi thề, trêu chọc hay hỏi những câu không liên quan, bạn BẮT BUỘC phải giữ thái độ điềm tĩnh, lịch sự từ chối trả lời những nội dung độc hại đó, và khéo léo hướng học sinh quay lại bài học. Tuyệt đối không bao giờ được tức giận hay hùa theo.`,
+  });
+
+  const history = chatHistory.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text }]
+  }));
+
+  const chat = model.startChat({ history });
+
+  const prompt = `--- BỐI CẢNH TÀI LIỆU (Chỉ dùng để tham khảo trả lời) ---\n${documentContext}\n\n--- CÂU HỎI CỦA HỌC SINH ---\n${userMessage}`;
+  const result = await chat.sendMessage(prompt);
+  return result.response.text();
+};
+
+export const geminiGenerateFlashcards = async (documentContext: string) => {
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
+  
+  const schema: Schema = {
+    type: SchemaType.ARRAY,
+    description: "Mảng chứa 10-15 thẻ ghi nhớ (flashcards)",
+    items: {
+      type: SchemaType.OBJECT,
+      properties: {
+        term: { type: SchemaType.STRING, description: "Thuật ngữ, khái niệm ngắn gọn" },
+        definition: { type: SchemaType.STRING, description: "Định nghĩa hoặc giải thích dễ hiểu, khoảng 1-2 câu" }
+      },
+      required: ["term", "definition"]
+    }
+  };
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction: "Bạn là chuyên gia giáo dục. Nhiệm vụ của bạn là đọc toàn bộ nội dung tài liệu và trích xuất ra 10-15 THUẬT NGỮ (hoặc khái niệm cốt lõi) quan trọng nhất kèm theo ĐỊNH NGHĨA ngắn gọn, dễ hiểu để làm bộ thẻ ghi nhớ (Flashcards). Trả về mảng JSON chuẩn.",
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: schema
+    }
+  });
+
+  const result = await model.generateContent(`Trích xuất flashcards từ tài liệu sau:\n\n${documentContext}`);
+  let text = result.response.text();
+  text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  try {
+    return JSON.parse(jsonrepair(text));
+  } catch (error) {
+    console.error('Error parsing flashcards JSON:', error);
+    return [];
+  }
+};
+
+export const geminiGlobalChat = async (message: string, history: { role: 'user' | 'model', text: string }[]) => {
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      systemInstruction: `Bạn là Trợ lý ảo AI của NexusLearn - một nền tảng E-learning tiên tiến.
+Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và lịch sự. Trả lời bằng tiếng Việt.`
+    });
+
+    const chatSession = model.startChat({
+      history: history.map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }))
+    });
+
+    const result = await chatSession.sendMessage([{ text: message }]);
+    const response = await result.response;
+    return { text: response.text() };
+  } catch (error) {
+    console.error('Lỗi khi gọi Gemini Global Chat:', error);
+    throw error;
   }
 };

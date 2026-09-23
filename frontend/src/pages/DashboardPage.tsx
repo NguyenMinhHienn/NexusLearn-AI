@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, BookOpen, Brain, TrendingUp, Plus, Clock, Trash2 } from 'lucide-react'
-import './DashboardPage.css'
+import { FileText, BookOpen, Brain, TrendingUp, Plus, Clock, Trash2, ArrowRight, Sparkles, Target, Zap, Upload } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function DashboardPage() {
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [stats, setStats] = useState({ totalDocs: 0, totalConcepts: 0, understoodPercent: 0, needsReview: 0 });
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth()
+  const [documents, setDocuments] = useState<any[]>([])
+  const [stats, setStats] = useState({ totalDocs: 0, totalConcepts: 0, understoodPercent: 0, needsReview: 0, activityData: [] })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
@@ -15,122 +18,239 @@ export default function DashboardPage() {
       axios.get('/api/documents/stats/summary')
     ])
       .then(([docsRes, statsRes]) => {
-        setDocuments(docsRes.data);
-        setStats(statsRes.data);
+        setDocuments(docsRes.data)
+        setStats(statsRes.data)
       })
       .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [])
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
-    e.preventDefault();
-    if (!window.confirm('Bạn có chắc muốn xóa tài liệu này không?')) return;
+    e.preventDefault()
+    if (!window.confirm('Bạn có chắc muốn xóa tài liệu này không?')) return
     try {
-      await axios.delete(`/api/documents/${id}`);
-      setDocuments(docs => docs.filter(doc => doc.id !== id));
+      await axios.delete(`/api/documents/${id}`)
+      setDocuments(docs => docs.filter(doc => doc.id !== id))
     } catch (err) {
-      alert('Lỗi khi xóa tài liệu');
+      alert('Lỗi khi xóa tài liệu')
     }
-  };
+  }
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  }
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+  }
 
   return (
-    <div className="dashboard fade-in">
-      <div className="dashboard-header">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="text-muted">Tổng quan tiến độ học tập</p>
-        </div>
-        <Link to="/app/upload" className="btn btn-primary">
-          <Plus size={18} /> Upload tài liệu mới
-        </Link>
-      </div>
-
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="w-full">
       
-      <div className="stats-grid">
-        <div className="stat-card fade-in stagger-1">
-          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>
-            <FileText size={22} />
-          </div>
-          <div>
-            <div className="stat-value">{stats.totalDocs}</div>
-            <div className="stat-label">Tài liệu</div>
-          </div>
-        </div>
-
-        <div className="stat-card fade-in stagger-2">
-          <div className="stat-icon" style={{ background: 'rgba(6,182,212,0.15)', color: '#22d3ee' }}>
-            <Brain size={22} />
-          </div>
-          <div>
-            <div className="stat-value">{stats.totalConcepts}</div>
-            <div className="stat-label">Concepts</div>
-          </div>
-        </div>
-
-        <div className="stat-card fade-in stagger-3">
-          <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
-            <TrendingUp size={22} />
-          </div>
-          <div>
-            <div className="stat-value">{stats.understoodPercent}%</div>
-            <div className="stat-label">Đã hiểu</div>
-          </div>
-        </div>
-
-        <div className="stat-card fade-in stagger-4">
-          <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
-            <BookOpen size={22} />
-          </div>
-          <div>
-            <div className="stat-value">{stats.needsReview}</div>
-            <div className="stat-label">Cần ôn lại</div>
-          </div>
-        </div>
-      </div>
-
-      
-      <div className="section-header">
-        <h2>Tài liệu gần đây</h2>
-      </div>
-
-      <div className="documents-grid">
-        {loading ? (
-          <div>Đang tải dữ liệu...</div>
-        ) : documents.map((doc, idx) => {
-          const progress = Math.round(((doc.completed_levels || 0) / 3) * 100);
-          return (
-          <Link to={`/app/documents/${doc.id}`} key={doc.id} className={`document-card card fade-in`} style={{ position: 'relative', animationDelay: `${idx * 0.1}s` }}>
-            <button 
-              onClick={(e) => handleDelete(e, doc.id)}
-              className="btn btn-ghost btn-sm"
-              style={{ position: 'absolute', top: '10px', right: '10px', color: '#ef4444', padding: '4px', zIndex: 10 }}
-              title="Xóa tài liệu"
-            >
-              <Trash2 size={18} />
-            </button>
-            <div className="doc-icon">
-              <FileText size={24} />
-            </div>
-            <div className="doc-info">
-              <h3>{doc.title}</h3>
-              <div className="doc-meta">
-                <span><Brain size={14} /> {doc.concepts_count} concepts</span>
-                <span><Clock size={14} /> {new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
-              </div>
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }}></div>
-              </div>
-              <span className="progress-text">{progress}% đã hiểu</span>
-            </div>
-          </Link>
-        )})}
-
+      {/* 1. HERO BANNER - MIND BLOWING */}
+      <motion.div variants={itemVariants} className="relative w-full h-[280px] rounded-[2.5rem] mb-8 overflow-hidden shadow-2xl dark:shadow-indigo-900/20 group">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-primary-700 to-violet-900"></div>
         
-        <Link to="/app/upload" className="document-card card add-card">
-          <Plus size={32} />
-          <span>Upload tài liệu mới</span>
-        </Link>
+        {/* Animated Background Orbs */}
+        <div className="absolute top-[-50%] left-[-10%] w-96 h-96 bg-white/20 rounded-full mix-blend-overlay filter blur-3xl opacity-50 animate-blob"></div>
+        <div className="absolute bottom-[-50%] right-[-10%] w-96 h-96 bg-cyan-400/30 rounded-full mix-blend-overlay filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
+
+        {/* Chart in background */}
+        <div className="absolute bottom-0 left-0 w-full h-32 opacity-30 pointer-events-none">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={stats.activityData || []}>
+              <defs>
+                <linearGradient id="heroGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#fff" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#fff" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="value" stroke="none" fill="url(#heroGradient)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="absolute inset-0 p-8 sm:p-12 flex flex-col justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-md text-white text-sm font-medium w-max mb-6 border border-white/20">
+            <Sparkles size={16} /> Phiên bản Premium
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-heading font-extrabold text-white mb-4 drop-shadow-md">
+            Sẵn sàng chinh phục tri thức, {user?.name?.split(' ')[0] || 'bạn'}?
+          </h1>
+          <p className="text-indigo-100 text-lg max-w-xl leading-relaxed">
+            AI đã xử lý xong các tài liệu mới nhất của bạn. Tóm tắt và sơ đồ tư duy đã sẵn sàng để bạn ôn tập ngay hôm nay.
+          </p>
+          <div className="mt-8 flex gap-4">
+            <Link to="/app/upload" className="px-8 py-3.5 bg-white text-indigo-600 hover:bg-slate-50 rounded-2xl font-bold shadow-lg transition-transform hover:-translate-y-1 flex items-center gap-2">
+              <Upload size={20} /> Tải lên tài liệu
+            </Link>
+            <button className="px-8 py-3.5 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-2xl font-bold transition-transform hover:-translate-y-1 flex items-center gap-2 border border-white/20">
+              <Target size={20} /> Ôn tập ngay
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* 2. BENTO GRID METRICS & ACTIVITY */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+        {/* Left Column: 4 Metrics in a 2x2 Grid */}
+        <div className="lg:col-span-1 grid grid-cols-2 gap-4">
+          <motion.div variants={itemVariants} className="glass-card p-5 relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all"></div>
+            <FileText size={28} className="text-indigo-500 mb-4" />
+            <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.totalDocs}</div>
+            <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Tài liệu</div>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="glass-card p-5 relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-cyan-500/10 rounded-full blur-xl group-hover:bg-cyan-500/20 transition-all"></div>
+            <Brain size={28} className="text-cyan-500 mb-4" />
+            <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.totalConcepts}</div>
+            <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Khái niệm AI</div>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="glass-card p-5 relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition-all"></div>
+            <TrendingUp size={28} className="text-emerald-500 mb-4" />
+            <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.understoodPercent}%</div>
+            <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Mức độ hiểu</div>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="glass-card p-5 relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition-all"></div>
+            <BookOpen size={28} className="text-amber-500 mb-4" />
+            <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.needsReview}</div>
+            <div className="text-sm font-medium text-slate-500 dark:text-slate-400">Cần ôn tập</div>
+          </motion.div>
+        </div>
+
+        {/* Right Column: Activity Chart */}
+        <motion.div variants={itemVariants} className="lg:col-span-2 glass-card p-6 flex flex-col relative overflow-hidden group">
+           <div className="absolute top-0 right-0 w-full h-1/2 bg-gradient-to-b from-primary-500/5 to-transparent pointer-events-none"></div>
+           <div className="flex justify-between items-center mb-6">
+             <div>
+               <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                 <Zap size={20} className="text-amber-500" /> Hoạt động tuần này
+               </h3>
+               <p className="text-sm text-slate-500">Dựa trên thời gian tương tác với AI</p>
+             </div>
+             <div className="px-3 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-sm font-semibold">
+               +24% so với tuần trước
+             </div>
+           </div>
+           
+           <div className="flex-1 min-h-[180px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.activityData || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                />
+                <Area type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+              </AreaChart>
+            </ResponsiveContainer>
+           </div>
+        </motion.div>
       </div>
-    </div>
+
+      {/* 3. DOCUMENTS SECTION */}
+      <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-heading font-bold text-slate-900 dark:text-white">Tài liệu gần đây</h2>
+        <Link to="/app/documents" className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 flex items-center gap-1 group">
+          Xem tất cả <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+        </Link>
+      </motion.div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-12">
+        {loading ? (
+          <div className="col-span-full py-12 flex items-center justify-center text-slate-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mr-3"></div>
+            Đang tải dữ liệu...
+          </div>
+        ) : documents.map((doc) => {
+          const progress = Math.round(((doc.completed_levels || 0) / 3) * 100)
+          return (
+            <motion.div key={doc.id} variants={itemVariants}>
+              <div className="glass-card p-6 hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-indigo-900/20 transition-all duration-300 relative group flex flex-col h-full">
+                <button 
+                  onClick={(e) => handleDelete(e, doc.id)}
+                  className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all z-10"
+                  title="Xóa tài liệu"
+                >
+                  <Trash2 size={18} />
+                </button>
+                
+                <div className="flex gap-4 mb-5">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-100 to-primary-100 dark:from-indigo-500/20 dark:to-primary-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-inner">
+                    <FileText size={26} />
+                  </div>
+                  <div className="flex-1 min-w-0 pr-8 flex flex-col justify-center">
+                    <h3 className="font-bold text-slate-900 dark:text-white truncate text-lg mb-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{doc.title}</h3>
+                    <div className="flex items-center gap-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1"><Brain size={14} /> {doc.concepts_count} concepts</span>
+                      <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                      <span className="flex items-center gap-1"><Clock size={14} /> {new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6 flex-1">
+                  <div className="flex justify-between items-end mb-2 text-sm">
+                    <span className="font-semibold text-slate-600 dark:text-slate-300">Tiến độ</span>
+                    <span className="font-bold text-primary-600 dark:text-primary-400">{progress}%</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className="h-full rounded-full bg-gradient-to-r from-primary-500 to-indigo-500 shadow-sm"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-auto">
+                  <Link
+                    to={`/app/documents/${doc.id}/flashcards`}
+                    className="px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Brain size={16} /> Flashcard
+                  </Link>
+                  <Link
+                    to={`/app/documents/${doc.id}`}
+                    className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-all shadow-md shadow-primary-500/20 flex items-center justify-center gap-2"
+                  >
+                    {doc.status === 'analyzed' ? (
+                      <>Vào học ngay <ArrowRight size={16} /></>
+                    ) : (
+                      <>Đang xử lý...</>
+                    )}
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )
+        })}
+
+        {/* Add New Document Card */}
+        <motion.div variants={itemVariants}>
+          <Link 
+            to="/app/upload" 
+            className="flex flex-col items-center justify-center gap-4 min-h-[200px] h-full rounded-[1.5rem] border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 text-slate-500 hover:text-primary-600 hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-all duration-300 group"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 group-hover:bg-primary-100 dark:group-hover:bg-primary-900/40 flex items-center justify-center transition-colors shadow-sm group-hover:shadow-md">
+              <Plus size={32} className="group-hover:scale-110 transition-transform" />
+            </div>
+            <span className="font-bold text-lg">Tải lên tài liệu mới</span>
+          </Link>
+        </motion.div>
+      </div>
+    </motion.div>
   )
 }

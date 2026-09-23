@@ -7,7 +7,7 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { syncUserQuota } from '../services/quotaService';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'studymate_super_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'nexuslearn_super_secret_key_2026';
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;

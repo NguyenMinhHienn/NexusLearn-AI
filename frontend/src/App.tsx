@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import MainLayout from './layouts/MainLayout'
 import LandingPage from './pages/LandingPage'
@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import UploadPage from './pages/UploadPage'
 import DocumentPage from './pages/DocumentPage'
 import KnowledgeMapPage from './pages/KnowledgeMapPage'
+import FlashcardPage from './pages/FlashcardPage'
 import QuizPage from './pages/QuizPage'
 import AdminDashboard from './pages/AdminDashboard'
 import ChatBot from './components/ChatBot'
@@ -43,6 +44,7 @@ function App() {
           <Route path="documents/:id" element={<DocumentPage />} />
           <Route path="documents/:id/map" element={<KnowledgeMapPage />} />
           <Route path="documents/:id/quiz" element={<QuizPage />} />
+          <Route path="documents/:id/flashcards" element={<FlashcardPage />} />
         </Route>
 
         
@@ -52,7 +54,7 @@ function App() {
           <Route path="settings" element={<AdminDashboard />} />
         </Route>
       </Routes>
-      <ChatBot />
+      {!location.pathname.includes('/documents/') && <ChatBot />}
     </AuthProvider>
   )
 }

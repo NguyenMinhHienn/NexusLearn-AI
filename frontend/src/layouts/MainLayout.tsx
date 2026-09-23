@@ -1,107 +1,216 @@
-import { Outlet, NavLink, useNavigate, Link, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { BookOpen, Upload, LayoutDashboard, LogOut, Brain, Settings, User, BarChart3, Users } from 'lucide-react'
-import './MainLayout.css'
+import { BookOpen, Upload, LayoutDashboard, LogOut, Brain, Settings, User, BarChart3, Users, Sun, Moon, Monitor } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from 'react'
 
 export default function MainLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+
+  // Theme logic
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' || 'system'
+    setTheme(savedTheme)
+  }, [])
+
+  useEffect(() => {
+    const root = window.document.documentElement
+    root.classList.remove('light', 'dark')
+
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      root.classList.add(systemTheme)
+    } else {
+      root.classList.add(theme)
+    }
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   const handleLogout = () => {
     logout()
     navigate('/')
   }
 
+  const navItemClass = ({ isActive }: { isActive: boolean }) => 
+    `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 font-medium ${
+      isActive 
+        ? 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400' 
+        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+    }`
+
   return (
-    <div className="layout">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 overflow-hidden">
       
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <Brain size={28} className="sidebar-logo-icon" />
-          <span className="sidebar-title">StudyMate</span>
+      <aside className="w-64 lg:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col flex-shrink-0 transition-colors duration-300 relative z-30">
+        {/* Logo */}
+        <div className="p-6 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/50">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-primary-100 dark:bg-primary-500/20 flex items-center justify-center text-primary-600 dark:text-primary-400">
+            <img src="/logo.jpg" alt="NexusLearn Logo" className="w-full h-full object-cover" />
+          </div>
+          <span className="font-heading font-bold text-xl text-slate-900 dark:text-white tracking-tight">NexusLearn</span>
         </div>
 
-        <nav className="sidebar-nav">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
           {user?.role === 'admin' ? (
-            <>
-              <div style={{ padding: '0 16px', marginBottom: '8px', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+            <div>
+              <div className="px-4 mb-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 Quản trị hệ thống
               </div>
-              <NavLink to="/app/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                <BarChart3 size={20} />
-                <span>Tổng quan</span>
-              </NavLink>
-              <NavLink to="/app/admin/users" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                <Users size={20} />
-                <span>Người dùng</span>
-              </NavLink>
-              <NavLink to="/app/admin/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                <Settings size={20} />
-                <span>Cài đặt hệ thống</span>
-              </NavLink>
-            </>
+              <div className="space-y-1">
+                <NavLink to="/app/admin" end className={navItemClass}>
+                  <BarChart3 size={20} />
+                  <span>Tổng quan</span>
+                </NavLink>
+                <NavLink to="/app/admin/users" className={navItemClass}>
+                  <Users size={20} />
+                  <span>Người dùng</span>
+                </NavLink>
+                <NavLink to="/app/admin/settings" className={navItemClass}>
+                  <Settings size={20} />
+                  <span>Cài đặt hệ thống</span>
+                </NavLink>
+              </div>
+            </div>
           ) : (
-            <>
-              <div style={{ padding: '0 16px', marginBottom: '8px', fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+            <div>
+              <div className="px-4 mb-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 Học tập
               </div>
-              <NavLink to="/app" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                <LayoutDashboard size={20} />
-                <span>Dashboard</span>
-              </NavLink>
-              <NavLink to="/app/upload" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                <Upload size={20} />
-                <span>Upload tài liệu</span>
-              </NavLink>
-            </>
+              <div className="space-y-1">
+                <NavLink to="/app" end className={navItemClass}>
+                  <LayoutDashboard size={20} />
+                  <span>Dashboard</span>
+                </NavLink>
+                <NavLink to="/app/upload" className={navItemClass}>
+                  <Upload size={20} />
+                  <span>Upload tài liệu</span>
+                </NavLink>
+              </div>
+            </div>
           )}
         </nav>
 
-        
-        {user && (
-          <div className="quota-widget" style={{ padding: '16px', borderTop: '1px solid var(--border)', fontSize: '13px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px', color: 'var(--text-muted)' }}>
-              <span style={{ fontWeight: 600 }}>AI Token Quota</span>
-              <span style={{ fontSize: '12px' }}>{user.tokens_used} / {user.token_quota}</span>
-            </div>
-            <div className="progress-bar" style={{ height: '6px', background: 'var(--bg-primary)', borderRadius: '4px', overflow: 'hidden' }}>
-              <div 
-                className="progress-fill" 
-                style={{ 
-                  width: `${Math.min((user.tokens_used / user.token_quota) * 100, 100)}%`,
-                  background: (user.tokens_used / user.token_quota) > 0.9 ? 'var(--danger)' : 'var(--primary)',
-                  height: '100%'
-                }}
-              />
-            </div>
-            {(user.tokens_used / user.token_quota) >= 0.9 && (
-              <div style={{ color: 'var(--danger)', fontSize: '11px', marginTop: '4px' }}>
-                Bạn sắp hết hạn mức token!
+        {/* User / Footer */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 relative">
+          {user && (
+            <div className="mb-4 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex justify-between items-end mb-2 text-sm">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">AI Token</span>
+                <span className="text-slate-500 dark:text-slate-400 text-xs font-medium">{user.tokens_used} / {user.token_quota}</span>
               </div>
-            )}
-          </div>
-        )}
+              <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((user.tokens_used / user.token_quota) * 100, 100)}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={`h-full rounded-full ${
+                    (user.tokens_used / user.token_quota) > 0.9 ? 'bg-danger' : 'bg-primary-500'
+                  }`}
+                />
+              </div>
+            </div>
+          )}
 
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="user-avatar">
-              <User size={20} />
+          {/* Profile Popup Menu */}
+          <AnimatePresence>
+            {isProfileMenuOpen && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-40 bg-transparent"
+                  onClick={() => setIsProfileMenuOpen(false)}
+                ></motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute bottom-full left-4 right-4 mb-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl dark:shadow-indigo-500/10 border border-slate-200/50 dark:border-slate-700/50 overflow-hidden z-50 p-2"
+                >
+                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 mb-2 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl">
+                    <p className="font-bold text-slate-900 dark:text-white truncate">{user?.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                  </div>
+                  
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-400 rounded-xl transition-all">
+                    <User size={18} /> Cập nhật hồ sơ
+                  </button>
+
+                  <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
+                  
+                  <div className="px-4 py-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    Giao diện (Theme)
+                  </div>
+                  <div className="flex gap-2 px-2 pb-2">
+                    <button 
+                      onClick={() => setTheme('light')}
+                      className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-xl text-xs font-bold transition-all ${theme === 'light' ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      <Sun size={18} /> Sáng
+                    </button>
+                    <button 
+                      onClick={() => setTheme('dark')}
+                      className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-xl text-xs font-bold transition-all ${theme === 'dark' ? 'bg-slate-800 text-white dark:bg-primary-500/20 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      <Moon size={18} /> Tối
+                    </button>
+                    <button 
+                      onClick={() => setTheme('system')}
+                      className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-xl text-xs font-bold transition-all ${theme === 'system' ? 'bg-slate-200 text-slate-800 dark:bg-primary-500/20 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      <Monitor size={18} /> Auto
+                    </button>
+                  </div>
+
+                  <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
+
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-danger hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
+                  >
+                    <LogOut size={18} /> Đăng xuất
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          <button 
+            onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+            className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all border-2 ${isProfileMenuOpen ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10' : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          >
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0">
+                <User size={18} />
+              </div>
+              <div className="flex flex-col min-w-0 text-left">
+                <span className={`text-sm font-bold truncate transition-colors ${isProfileMenuOpen ? 'text-primary-700 dark:text-primary-400' : 'text-slate-900 dark:text-white'}`}>{user?.name}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.role === 'admin' ? '⭐ Admin' : user?.email}</span>
+              </div>
             </div>
-            <div className="user-details">
-              <span className="user-name">{user?.name}</span>
-              <span className="user-email">{user?.role === 'admin' ? '⭐ Admin' : user?.email}</span>
+            
+            <div className={`text-slate-400 transition-transform duration-300 ${isProfileMenuOpen ? 'rotate-180 text-primary-500' : ''}`}>
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
             </div>
-          </div>
-          <button className="btn btn-ghost" onClick={handleLogout} title="Đăng xuất" style={{ padding: '8px' }}>
-            <LogOut size={20} color="var(--text-muted)" />
           </button>
         </div>
       </aside>
 
-      
-      <main className="main-content">
-        <Outlet />
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto relative z-10 bg-slate-50 dark:bg-slate-950">
+        {/* Subtle mesh background for the main content area */}
+        <div className="absolute inset-0 bg-mesh opacity-[0.15] dark:opacity-[0.05] pointer-events-none mix-blend-multiply dark:mix-blend-screen transition-opacity duration-300"></div>
+        <div className="relative z-10 p-6 sm:p-8 lg:p-12 w-full max-w-7xl mx-auto min-h-full">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

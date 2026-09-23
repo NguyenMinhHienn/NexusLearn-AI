@@ -1,88 +1,88 @@
-﻿# NexusLearn AI (formerly StudyMate) ðŸš€
+﻿# NexusLearn AI (formerly StudyMate) 🚀
 
 ![NexusLearn Hero](frontend/public/logo.jpg)
 
-> **âš ï¸ TUYÃŠN Bá» Vá»€ Báº¢N QUYá»€N VÃ€ TÃNH Äá»˜C Báº¢N (STATEMENT OF ORIGINALITY) âš ï¸**
+> **⚠️ TUYÊN BỐ VỀ BẢN QUYỀN VÀ TÍNH ĐỘC BẢN (STATEMENT OF ORIGINALITY) ⚠️**
 > 
-> ÄÃ¢y lÃ  sáº£n pháº©m vÃ  cháº¥t xÃ¡m Äá»˜C QUYá»€N cá»§a tÃ´i. ToÃ n bá»™ Ã½ tÆ°á»Ÿng khá»Ÿi táº¡o, quy trÃ¬nh thiáº¿t káº¿, flow tÃ­nh nÄƒng vÃ  kiáº¿n trÃºc cá»§a há»‡ thá»‘ng nÃ y Ä‘Ã£ Ä‘Æ°á»£c tÃ´i lÃªn káº¿ hoáº¡ch vÃ  thai nghÃ©n tá»« giá»¯a nÄƒm 2025. 
+> Đây là sản phẩm và chất xám ĐỘC QUYỀN của tôi. Toàn bộ ý tưởng khởi tạo, quy trình thiết kế, flow tính năng và kiến trúc của hệ thống này đã được tôi lên kế hoạch và thai nghén từ giữa năm 2025. 
 > 
-> Gáº§n Ä‘Ã¢y, cÃ³ sá»± xuáº¥t hiá»‡n cá»§a má»™t trang web mang tÃªn **"getstudymate"** cÃ³ giao diá»‡n, tÃªn gá»i vÃ  luá»“ng tÃ­nh nÄƒng giá»‘ng há»‡t má»™t cÃ¡ch báº¥t thÆ°á»ng vá»›i nhá»¯ng gÃ¬ tÃ´i Ä‘Ã£ vÃ  Ä‘ang xÃ¢y dá»±ng. TÃ´i xin Ä‘Ã­nh chÃ­nh vÃ  kháº³ng Ä‘á»‹nh máº¡nh máº½: **NexusLearn AI (TÃªn gá»‘c: StudyMate) lÃ  dá»± Ã¡n nguyÃªn báº£n 100% cá»§a tÃ´i. TÃ´i KHÃ”NG Äƒn cáº¯p Ã½ tÆ°á»Ÿng, KHÃ”NG sao chÃ©p cháº¥t xÃ¡m tá»« báº¥t ká»³ cÃ¡ nhÃ¢n hay tá»• chá»©c nÃ o.** Dá»± Ã¡n nÃ y Ä‘Æ°á»£c tÃ¡i Ä‘á»‹nh vá»‹ thÆ°Æ¡ng hiá»‡u thÃ nh **NexusLearn** Ä‘á»ƒ kháº³ng Ä‘á»‹nh vá»‹ tháº¿ Ä‘á»™c tÃ´n vÃ  cáº¯t Ä‘á»©t má»i sá»± nháº§m láº«n vá»›i cÃ¡c sáº£n pháº©m "trÃ¹ng láº·p Ã½ tÆ°á»Ÿng" ngoÃ i kia.
+> Gần đây, có sự xuất hiện của một trang web mang tên **"getstudymate"** có giao diện, tên gọi và luồng tính năng giống hệt một cách bất thường với những gì tôi đã và đang xây dựng. Tôi xin đính chính và khẳng định mạnh mẽ: **NexusLearn AI (Tên gốc: StudyMate) là dự án nguyên bản 100% của tôi. Tôi KHÔNG ăn cắp ý tưởng, KHÔNG sao chép chất xám từ bất kỳ cá nhân hay tổ chức nào.** Dự án này được tái định vị thương hiệu thành **NexusLearn** để khẳng định vị thế độc tôn và cắt đứt mọi sự nhầm lẫn với các sản phẩm "trùng lặp ý tưởng" ngoài kia.
 
 ---
 
-## ðŸŒŸ Táº§m NhÃ¬n & TÃ­nh NÄƒng Ná»•i Báº­t
+## 🌟 Tầm Nhìn & Tính Năng Nổi Bật
 
-NexusLearn AI khÃ´ng chá»‰ lÃ  má»™t cÃ´ng cá»¥ tÃ³m táº¯t vÄƒn báº£n. ÄÃ¢y lÃ  má»™t há»‡ sinh thÃ¡i E-learning thÃ´ng minh giÃºp **há»‡ thá»‘ng hÃ³a tri thá»©c** báº±ng cÃ´ng nghá»‡ AI tiÃªn tiáº¿n (Google Gemini 2.5 Flash), vá»›i giao diá»‡n chuáº©n SaaS Vercel/Linear cao cáº¥p.
+NexusLearn AI không chỉ là một công cụ tóm tắt văn bản. Đây là một hệ sinh thái E-learning thông minh giúp **hệ thống hóa tri thức** bằng công nghệ AI tiên tiến (Google Gemini 2.5 Flash), với giao diện chuẩn SaaS Vercel/Linear cao cấp.
 
-- ðŸ§  **SÆ¡ Äá»“ TÆ° Duy (Knowledge Map):** Tá»± Ä‘á»™ng bÃ³c tÃ¡ch tÃ i liá»‡u vÃ  váº½ ra SÆ¡ Ä‘á»“ tÆ° duy dáº¡ng node-graph tÆ°Æ¡ng tÃ¡c 360 Ä‘á»™. GiÃºp ngÆ°á»i há»c nhÃ¬n tháº¥u cáº¥u trÃºc kiáº¿n thá»©c.
-- ðŸ“š **Há»‡ Thá»‘ng BÃ i Giáº£ng & Flashcards:** Tá»± Ä‘á»™ng táº¡o tháº» ghi nhá»› vÃ  chia nhá» bÃ i giáº£ng theo cáº¥p Ä‘á»™ (CÆ¡ báº£n Ä‘áº¿n NÃ¢ng cao).
-- ðŸŽ¯ **Quiz & ÄÃ¡nh GiÃ¡ NÄƒng Lá»±c:** Tá»± Ä‘á»™ng sinh bá»™ cÃ¢u há»i tráº¯c nghiá»‡m sau má»—i bÃ i há»c Ä‘á»ƒ cá»§ng cá»‘ kiáº¿n thá»©c.
-- ðŸ¤– **Trá»£ LÃ½ AI (Global ChatBot):** Chatbot toÃ n há»‡ thá»‘ng há»— trá»£ giáº£i Ä‘Ã¡p má»i tháº¯c máº¯c há»c táº­p chung.
-- ðŸŽ“ **Gia SÆ° áº¢o AI (Document Tutor):** TÃ­ch há»£p sÃ¢u vÃ o tá»«ng tÃ i liá»‡u, hiá»ƒu rÃµ ngá»¯ cáº£nh cá»§a bÃ i giáº£ng Ä‘á»ƒ giáº£i thÃ­ch cáº·n káº½ tá»«ng khÃ¡i niá»‡m khÃ³.
-- ðŸŒŒ **Giao Diá»‡n Äáº³ng Cáº¥p:** Há»— trá»£ Dark Mode / Light Mode siÃªu mÆ°á»£t mÃ  vá»›i hiá»‡u á»©ng Glassmorphism hiá»‡n Ä‘áº¡i.
+- 🧠 **Sơ Đồ Tư Duy (Knowledge Map):** Tự động bóc tách tài liệu và vẽ ra Sơ đồ tư duy dạng node-graph tương tác 360 độ. Giúp người học nhìn thấu cấu trúc kiến thức.
+- 📚 **Hệ Thống Bài Giảng & Flashcards:** Tự động tạo thẻ ghi nhớ và chia nhỏ bài giảng theo cấp độ (Cơ bản đến Nâng cao).
+- 🎯 **Quiz & Đánh Giá Năng Lực:** Tự động sinh bộ câu hỏi trắc nghiệm sau mỗi bài học để củng cố kiến thức.
+- 🤖 **Trợ Lý AI (Global ChatBot):** Chatbot toàn hệ thống hỗ trợ giải đáp mọi thắc mắc học tập chung.
+- 🎓 **Gia Sư Ảo AI (Document Tutor):** Tích hợp sâu vào từng tài liệu, hiểu rõ ngữ cảnh của bài giảng để giải thích cặn kẽ từng khái niệm khó.
+- 🌌 **Giao Diện Đẳng Cấp:** Hỗ trợ Dark Mode / Light Mode siêu mượt mà với hiệu ứng Glassmorphism hiện đại.
 
 ---
 
-## ðŸ› ï¸ CÃ´ng Nghá»‡ Sá»­ Dá»¥ng
+## 🛠️ Công Nghệ Sử Dụng
 
 - **Frontend:** React (Vite), Tailwind CSS, Framer Motion, Lucide Icons, React Flow (cho Node Graph).
 - **Backend:** Node.js, Express, TypeScript.
 - **AI Engine:** Google Gemini 2.5 Flash API.
-- **PhÃ¢n TÃ­ch Dá»¯ Liá»‡u:** Xá»­ lÃ½ PDF vÃ  trÃ­ch xuáº¥t ná»™i dung báº±ng `pdf-parse` & custom scraping.
+- **Phân Tích Dữ Liệu:** Xử lý PDF và trích xuất nội dung bằng `pdf-parse` & custom scraping.
 
 ---
 
-## âš™ï¸ HÆ°á»›ng Dáº«n CÃ i Äáº·t & Khá»Ÿi Cháº¡y
+## ⚙️ Hướng Dẫn Cài Đặt & Khởi Chạy
 
-Dá»± Ã¡n Ä‘Æ°á»£c chia lÃ m 2 pháº§n Ä‘á»™c láº­p: `backend` vÃ  `frontend`. Äá»ƒ cháº¡y dá»± Ã¡n trÃªn mÃ¡y cá»§a báº¡n (Localhost), hÃ£y lÃ m theo cÃ¡c bÆ°á»›c sau:
+Dự án được chia làm 2 phần độc lập: `backend` và `frontend`. Để chạy dự án trên máy của bạn (Localhost), hãy làm theo các bước sau:
 
-### YÃªu Cáº§u Cáº¥u HÃ¬nh
-- CÃ i Ä‘áº·t **Node.js** (Khuyáº¿n nghá»‹ phiÃªn báº£n v18.x trá»Ÿ lÃªn).
-- CÃ³ API Key cá»§a Google Gemini.
+### Yêu Cầu Cấu Hình
+- Cài đặt **Node.js** (Khuyến nghị phiên bản v18.x trở lên).
+- Có API Key của Google Gemini.
 
-### 1. Khá»Ÿi cháº¡y Backend (MÃ¡y Chá»§)
+### 1. Khởi chạy Backend (Máy Chủ)
 
-1. Má»Ÿ Terminal vÃ  di chuyá»ƒn vÃ o thÆ° má»¥c `backend`:
+1. Mở Terminal và di chuyển vào thư mục `backend`:
    ```bash
    cd backend
    ```
-2. CÃ i Ä‘áº·t cÃ¡c thÆ° viá»‡n cáº§n thiáº¿t:
+2. Cài đặt các thư viện cần thiết:
    ```bash
    npm install
    ```
-3. Cáº¥u hÃ¬nh biáº¿n mÃ´i trÆ°á»ng:
-   - Táº¡o má»™t file tÃªn lÃ  `.env` á»Ÿ trong thÆ° má»¥c `backend` (Ngang hÃ ng vá»›i package.json).
-   - ThÃªm ná»™i dung sau vÃ o file `.env`:
+3. Cấu hình biến môi trường:
+   - Tạo một file tên là `.env` ở trong thư mục `backend` (Ngang hàng với package.json).
+   - Thêm nội dung sau vào file `.env`:
      ```env
      PORT=3001
      JWT_SECRET=your_super_secret_jwt_key
-     GEMINI_API_KEY=Ä‘iá»n_api_key_gemini_cá»§a_báº¡n_vÃ o_Ä‘Ã¢y
+     GEMINI_API_KEY=điền_api_key_gemini_của_bạn_vào_đây
      ```
-4. Cháº¡y server:
+4. Chạy server:
    ```bash
    npm run dev
    ```
-   *Server backend sáº½ cháº¡y táº¡i Ä‘á»‹a chá»‰: `http://localhost:3001`*
+   *Server backend sẽ chạy tại địa chỉ: `http://localhost:3001`*
 
-### 2. Khá»Ÿi cháº¡y Frontend (Giao Diá»‡n)
+### 2. Khởi chạy Frontend (Giao Diện)
 
-1. Má»Ÿ má»™t Terminal má»›i (Giá»¯ nguyÃªn Terminal backend Ä‘ang cháº¡y) vÃ  di chuyá»ƒn vÃ o thÆ° má»¥c `frontend`:
+1. Mở một Terminal mới (Giữ nguyên Terminal backend đang chạy) và di chuyển vào thư mục `frontend`:
    ```bash
    cd frontend
    ```
-2. CÃ i Ä‘áº·t cÃ¡c thÆ° viá»‡n:
+2. Cài đặt các thư viện:
    ```bash
    npm install
    ```
-3. Cháº¡y giao diá»‡n ngÆ°á»i dÃ¹ng:
+3. Chạy giao diện người dùng:
    ```bash
    npm run dev
    ```
-   *Website sáº½ Ä‘Æ°á»£c má»Ÿ ra táº¡i Ä‘á»‹a chá»‰: `http://localhost:5173` (hoáº·c cá»•ng Ä‘Æ°á»£c hiá»ƒn thá»‹ trÃªn terminal).*
+   *Website sẽ được mở ra tại địa chỉ: `http://localhost:5173` (hoặc cổng được hiển thị trên terminal).*
 
 ---
 
-### ðŸš€ Báº¯t Äáº§u Tráº£i Nghiá»‡m
-Truy cáº­p vÃ o trÃ¬nh duyá»‡t báº±ng Ä‘Æ°á»ng dáº«n cá»§a Frontend, báº¥m **Báº¯t Ä‘áº§u miá»…n phÃ­**, táº£i lÃªn má»™t file tÃ i liá»‡u bÃ i giáº£ng (PDF) vÃ  Ä‘á»ƒ NexusLearn phÃ´ diá»…n sá»©c máº¡nh phÃ¢n tÃ­ch cá»§a nÃ³!
+### 🚀 Bắt Đầu Trải Nghiệm
+Truy cập vào trình duyệt bằng đường dẫn của Frontend, bấm **Bắt đầu miễn phí**, tải lên một file tài liệu bài giảng (PDF) và để NexusLearn phô diễn sức mạnh phân tích của nó!
 
-> *Â© 2026 NexusLearn AI. All rights reserved.*
+> *© 2026 NexusLearn AI. All rights reserved.*

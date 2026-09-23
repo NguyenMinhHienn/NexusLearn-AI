@@ -4,7 +4,7 @@ import { geminiGlobalChat } from '../services/geminiAiService';
 
 const router = express.Router();
 
-router.post('/global', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/global', async (req, res) => {
   try {
     const { message, history } = req.body;
 

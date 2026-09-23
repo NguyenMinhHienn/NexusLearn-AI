@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageSquare, X, Send, Bot } from 'lucide-react'
+import { MessageSquare, X, Send, Bot, Facebook } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
@@ -25,7 +25,7 @@ export default function ChatBot() {
   }, [messages])
 
   const handleSend = async () => {
-    if (!input.trim() || !user) return
+    if (!input.trim()) return
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', text: input }
     setMessages(prev => [...prev, userMessage])
@@ -57,20 +57,29 @@ export default function ChatBot() {
 
   return (
     <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 left-6 w-14 h-14 bg-gradient-to-br from-indigo-500 to-cyan-600 rounded-full flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-110 transition-all z-40 group border-2 border-white/20"
-      >
-        <MessageSquare size={24} />
-      </button>
+      <div className="fixed bottom-6 right-6 flex flex-col items-center gap-4 z-40">
+        <a 
+          href="#" 
+          onClick={e => e.preventDefault()}
+          className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform"
+        >
+          <Facebook size={24} />
+        </a>
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-cyan-600 rounded-full flex items-center justify-center text-white shadow-2xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:scale-110 transition-all group border-2 border-white/20"
+        >
+          <MessageSquare size={24} />
+        </button>
+      </div>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9, transformOrigin: 'bottom left' }}
+            initial={{ opacity: 0, y: 50, scale: 0.9, transformOrigin: 'bottom right' }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-24 left-6 w-[380px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[70vh] bg-white dark:bg-[#111111] rounded-[2rem] shadow-2xl dark:shadow-[0_0_30px_rgba(255,255,255,0.03)] border border-slate-200 dark:border-white/10 flex flex-col z-50 overflow-hidden"
+            className="fixed bottom-24 right-6 w-[380px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[70vh] bg-white dark:bg-[#111111] rounded-[2rem] shadow-2xl dark:shadow-[0_0_30px_rgba(255,255,255,0.03)] border border-slate-200 dark:border-white/10 flex flex-col z-50 overflow-hidden"
           >
             <div className="p-4 bg-gradient-to-r from-indigo-600 to-cyan-600 flex justify-between items-center text-white shrink-0">
               <div className="flex items-center gap-3">

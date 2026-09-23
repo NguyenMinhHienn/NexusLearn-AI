@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
-app.use('/api/chat', authenticateToken, chatRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

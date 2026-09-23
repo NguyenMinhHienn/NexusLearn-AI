@@ -1,88 +1,106 @@
-# NexusLearn AI (formerly StudyMate)
+# NexusLearn AI
+
+> **An intelligent E-learning ecosystem that transforms raw documents into structured, interactive learning experiences powered by Google Gemini AI.**
 
 ![NexusLearn Hero](frontend/public/logo.jpg)
 
-> **TUYEN BO VE BAN QUYEN VA TINH DOC BAN (STATEMENT OF ORIGINALITY)**
-> 
-> Day la san pham va chat xam DOC QUYEN cua toi. Toan bo y tuong khoi tao, quy trinh thiet ke, flow tinh nang va kien truc cua he thong nay da duoc toi len ke hoach va thai nghen tu giua nam 2025. 
-> 
-> Gan day, co su xuat hien cua mot trang web mang ten **"getstudymate"** co giao dien, ten goi va luong tinh nang giong het mot cach bat thuong voi nhung gi toi da va dang xay dung. Toi xin dinh chinh va khang dinh manh me: **NexusLearn AI (Ten goc: StudyMate) la du an nguyen ban 100% cua toi. Toi KHONG an cap y tuong, KHONG sao chep chat xam tu bat ky ca nhan hay to chuc nao.** Du an nay duoc tai dinh vi thuong hieu thanh **NexusLearn** de khang dinh vi the doc ton va cat dut moi su nham lan voi cac san pham "trung lap y tuong" ngoai kia.
+## Author
+
+**Nguyen Minh Hien** - Creator, Designer & Developer
 
 ---
 
-## Tam Nhin va Tinh Nang Noi Bat
+## Statement of Originality
 
-NexusLearn AI khong chi la mot cong cu tom tat van ban. Day la mot he sinh thai E-learning thong minh giup **he thong hoa tri thuc** bang cong nghe AI tien tien (Google Gemini 2.5 Flash), voi giao dien chuan SaaS Vercel/Linear cao cap.
+This project is the **sole intellectual property** of **Nguyen Minh Hien**. The entire concept, feature design, system architecture, and user experience flow were independently ideated and planned starting from **mid-2025**.
 
-- **So Do Tu Duy (Knowledge Map):** Tu dong boc tach tai lieu va ve ra So do tu duy dang node-graph tuong tac 360 do. Giup nguoi hoc nhin thau cau truc kien thuc.
-- **He Thong Bai Giang va Flashcards:** Tu dong tao the ghi nho va chia nho bai giang theo cap do (Co ban den Nang cao).
-- **Quiz va Danh Gia Nang Luc:** Tu dong sinh bo cau hoi trac nghiem sau moi bai hoc de cung co kien thuc.
-- **Tro Ly AI (Global ChatBot):** Chatbot toan he thong ho tro giai dap moi thac mac hoc tap chung.
-- **Gia Su Ao AI (Document Tutor):** Tich hop sau vao tung tai lieu, hieu ro ngu canh cua bai giang de giai thich can ke tung khai niem kho.
-- **Giao Dien Dang Cap:** Ho tro Dark Mode / Light Mode sieu muot ma voi hieu ung Glassmorphism hien dai.
+Recently, a website under the name **"getstudymate"** has appeared with a suspiciously identical interface, naming convention, and feature flow to what I have been building. I want to make it absolutely clear: **NexusLearn AI (originally named StudyMate) is my 100% original work. I did NOT copy, steal, or derive any ideas from any individual or organization.** The project was rebranded to **NexusLearn** to establish a unique identity and eliminate any confusion with similar products.
 
 ---
 
-## Cong Nghe Su Dung
+## Key Features
 
-- **Frontend:** React (Vite), Tailwind CSS, Framer Motion, Lucide Icons, React Flow (cho Node Graph).
-- **Backend:** Node.js, Express, TypeScript.
-- **AI Engine:** Google Gemini 2.5 Flash API.
-- **Phan Tich Du Lieu:** Xu ly PDF va trich xuat noi dung bang pdf-parse va custom scraping.
-
----
-
-## Huong Dan Cai Dat va Khoi Chay
-
-Du an duoc chia lam 2 phan doc lap: `backend` va `frontend`. De chay du an tren may cua ban (Localhost), hay lam theo cac buoc sau:
-
-### Yeu Cau Cau Hinh
-- Cai dat **Node.js** (Khuyen nghi phien ban v18.x tro len).
-- Co API Key cua Google Gemini.
-
-### 1. Khoi chay Backend (May Chu)
-
-1. Mo Terminal va di chuyen vao thu muc `backend`:
-   ```bash
-   cd backend
-   ```
-2. Cai dat cac thu vien can thiet:
-   ```bash
-   npm install
-   ```
-3. Cau hinh bien moi truong:
-   - Tao mot file ten la `.env` o trong thu muc `backend` (Ngang hang voi package.json).
-   - Them noi dung sau vao file `.env`:
-     ```env
-     PORT=3001
-     JWT_SECRET=your_super_secret_jwt_key
-     GEMINI_API_KEY=your_gemini_api_key_here
-     ```
-4. Chay server:
-   ```bash
-   npm run dev
-   ```
-   Server backend se chay tai dia chi: http://localhost:3001
-
-### 2. Khoi chay Frontend (Giao Dien)
-
-1. Mo mot Terminal moi (Giu nguyen Terminal backend dang chay) va di chuyen vao thu muc `frontend`:
-   ```bash
-   cd frontend
-   ```
-2. Cai dat cac thu vien:
-   ```bash
-   npm install
-   ```
-3. Chay giao dien nguoi dung:
-   ```bash
-   npm run dev
-   ```
-   Website se duoc mo ra tai dia chi: http://localhost:5173 (hoac cong duoc hien thi tren terminal).
+| Feature | Description |
+|---------|-------------|
+| **Knowledge Map** | AI automatically extracts concepts and builds an interactive node-graph mind map with 360-degree navigation |
+| **Lessons & Flashcards** | Auto-generates structured lessons (Basic to Advanced) and flashcard decks for effective memorization |
+| **Quiz & Assessment** | Automatically creates multiple-choice quizzes after each lesson to reinforce learning |
+| **Global AI Assistant** | System-wide chatbot that answers any general learning questions |
+| **Document AI Tutor** | Context-aware AI tutor embedded in each document, deeply understands the material to explain complex concepts |
+| **Premium UI/UX** | Glassmorphism design with smooth Dark/Light mode transitions, Bento Grid layout, and micro-animations |
 
 ---
 
-### Bat Dau Trai Nghiem
-Truy cap vao trinh duyet bang duong dan cua Frontend, bam **Bat dau mien phi**, tai len mot file tai lieu bai giang (PDF) va de NexusLearn pho dien suc manh phan tich cua no!
+## Tech Stack
 
-> (c) 2026 NexusLearn AI. All rights reserved.
+- **Frontend:** React (Vite), Tailwind CSS, Framer Motion, Lucide Icons, React Flow
+- **Backend:** Node.js, Express, TypeScript
+- **AI Engine:** Google Gemini 2.5 Flash API
+- **Data Processing:** PDF parsing via `pdf-parse`, custom text extraction
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Node.js** v18.x or higher
+- **Google Gemini API Key** ([Get one here](https://aistudio.google.com/apikey))
+
+### 1. Backend Setup
+
+```bash
+# Navigate to backend directory
+cd backend
+
+# Install dependencies
+npm install
+```
+
+Create a `.env` file inside the `backend` folder:
+
+```env
+PORT=3001
+JWT_SECRET=your_super_secret_jwt_key
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+Start the server:
+
+```bash
+npm run dev
+```
+
+The backend will run at `http://localhost:3001`
+
+### 2. Frontend Setup
+
+Open a **new terminal** (keep the backend running):
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the dev server
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`
+
+---
+
+## How It Works
+
+1. **Upload** - Drop any PDF document or paste text content
+2. **AI Analysis** - Gemini AI reads, analyzes, and extracts the knowledge structure
+3. **Learn & Conquer** - Explore the Knowledge Map, complete lessons, and ace the quizzes
+
+---
+
+## License
+
+This project is proprietary software created by **Nguyen Minh Hien**. All rights reserved.
+
+> (c) 2026 NexusLearn AI by Nguyen Minh Hien. All rights reserved.

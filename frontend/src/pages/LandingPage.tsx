@@ -167,10 +167,10 @@ export default function LandingPage() {
             ref={heroTitleRef}
             className="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tighter mb-6 max-w-4xl"
           >
-            {splitWords(firstHalf)}
+            {splitWords(firstHalf || "Chinh phục tri thức")}
             <br className="hidden sm:block" />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 animate-gradient bg-[length:200%_auto]">
-              {splitWords(secondHalf)}
+              {splitWords(secondHalf || "Cùng AI")}
             </span>
           </h1>
 

@@ -28,13 +28,16 @@ Recently, a website under the name **"getstudymate"** has appeared with a suspic
 | **Global AI Assistant** | System-wide chatbot that answers any general learning questions |
 | **Document AI Tutor** | Context-aware AI tutor embedded in each document, deeply understands the material to explain complex concepts |
 | **Premium UI/UX** | Glassmorphism design with smooth Dark/Light mode transitions, Bento Grid layout, and micro-animations |
+| **Data Analytics Dashboard** | Real-time analytics dashboard with gorgeous Radar, Donut, and Area charts (via Recharts) |
+| **Multi-Language (i18n)** | Seamless real-time switching between English and Vietnamese |
 
 ---
 
 ## Tech Stack
 
-- **Frontend:** React (Vite), Tailwind CSS, Framer Motion, Lucide Icons, React Flow
-- **Backend:** Node.js, Express, TypeScript
+- **Frontend:** React (Vite), Tailwind CSS, Framer Motion, Lucide Icons, React Flow, Recharts, i18next
+- **Backend:** Node.js, Express, TypeScript, MySQL 8.0
+- **Infrastructure:** Docker (MySQL Database)
 - **AI Engine:** Google Gemini 2.5 Flash API
 - **Data Processing:** PDF parsing via `pdf-parse`, custom text extraction
 
@@ -44,50 +47,48 @@ Recently, a website under the name **"getstudymate"** has appeared with a suspic
 
 ### Prerequisites
 - **Node.js** v18.x or higher
+- **Docker Desktop** (For running the MySQL database)
 - **Google Gemini API Key** ([Get one here](https://aistudio.google.com/apikey))
 
-### 1. Backend Setup
-
-```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies
-npm install
-```
+### 1. Environment Setup
 
 Create a `.env` file inside the `backend` folder:
 
 ```env
 PORT=3001
-JWT_SECRET=your_super_secret_jwt_key
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=studymate
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Start the server:
+### 2. Start the Database (Docker)
+
+Make sure Docker Desktop is running, then run the following in the root folder:
 
 ```bash
-npm run dev
+# Start the MySQL container in the background
+docker-compose up -d
+
+# Initialize the database schema
+docker exec -i studymate_db mysql -u root studymate < database/schema.sql
 ```
 
-The backend will run at `http://localhost:3001`
+### 3. Run the Application
 
-### 2. Frontend Setup
-
-Open a **new terminal** (keep the backend running):
+We use `concurrently` to run both the Frontend and Backend servers simultaneously. In the root folder (`StudyMate-AI`), simply run:
 
 ```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
+# Install root dependencies (concurrently)
 npm install
 
-# Start the dev server
+# Start both servers
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`
+- The **Frontend** will be available at `http://localhost:5173`
+- The **Backend** will run at `http://localhost:3001`
 
 ---
 

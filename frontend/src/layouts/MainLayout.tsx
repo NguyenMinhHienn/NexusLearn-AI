@@ -1,34 +1,24 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { BookOpen, Upload, LayoutDashboard, LogOut, Brain, Settings, User, BarChart3, Users, Sun, Moon, Monitor } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import DashboardParticles from '../components/DashboardParticles'
 
 export default function MainLayout() {
   const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
 
-  // Theme logic
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'system' || 'system'
-    setTheme(savedTheme)
-  }, [])
-
-  useEffect(() => {
-    const root = window.document.documentElement
-    root.classList.remove('light', 'dark')
-
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      root.classList.add(systemTheme)
-    } else {
-      root.classList.add(theme)
-    }
-    localStorage.setItem('theme', theme)
-  }, [theme])
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng)
+    localStorage.setItem('language', lng)
+  }
 
   const handleLogout = () => {
     logout()
@@ -172,6 +162,26 @@ export default function MainLayout() {
 
                   <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
 
+                  <div className="px-4 py-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    Ngôn ngữ (Language)
+                  </div>
+                  <div className="flex gap-2 px-2 pb-2">
+                    <button 
+                      onClick={() => changeLanguage('vi')}
+                      className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold transition-all ${i18n.language === 'vi' ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      🇻🇳 Tiếng Việt
+                    </button>
+                    <button 
+                      onClick={() => changeLanguage('en')}
+                      className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold transition-all ${i18n.language === 'en' ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      🇬🇧 English
+                    </button>
+                  </div>
+
+                  <div className="my-2 border-t border-slate-100 dark:border-slate-800"></div>
+
                   <button 
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-danger hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
@@ -206,8 +216,21 @@ export default function MainLayout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto relative z-10 bg-slate-50 dark:bg-slate-950">
-        {/* Subtle mesh background for the main content area */}
-        <div className="absolute inset-0 bg-mesh opacity-[0.15] dark:opacity-[0.05] pointer-events-none mix-blend-multiply dark:mix-blend-screen transition-opacity duration-300"></div>
+        
+        {/* Animated Background System for entire Dashboard */}
+        <div className="absolute inset-0 overflow-hidden flex justify-center items-center pointer-events-none">
+          {/* Vivid Blobs */}
+          <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-500/20 dark:bg-indigo-600/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[80px] animate-blob"></div>
+          <div className="absolute top-[20%] right-[-10%] w-[400px] h-[400px] bg-cyan-500/20 dark:bg-cyan-600/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[80px] animate-blob" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute bottom-[-20%] left-[20%] w-[600px] h-[600px] bg-purple-500/20 dark:bg-purple-600/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[80px] animate-blob" style={{ animationDelay: '4s' }}></div>
+          
+          {/* Dot Pattern Overlay */}
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMTQ4LCAxNjMsIDE4NCwgMC4xNSkiLz48L3N2Zz4=')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjI2LCAyMzIsIDI0MCwgMC4wNSkiLz48L3N2Zz4=')] mask-image:linear-gradient(to_bottom,white,transparent)] opacity-60"></div>
+          
+          {/* Interactive Particles Layer */}
+          <DashboardParticles />
+        </div>
+
         <div className="relative z-10 p-6 sm:p-8 lg:p-12 w-full max-w-7xl mx-auto min-h-full">
           <Outlet />
         </div>

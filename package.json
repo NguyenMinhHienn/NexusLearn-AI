@@ -1,0 +1,24 @@
+{
+  "name": "studymate-ai",
+  "version": "1.0.0",
+  "description": "> **An intelligent E-learning ecosystem that transforms raw documents into structured, interactive learning experiences powered by Google Gemini AI.**",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NguyenMinhHienn/StudyMate-AI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/NguyenMinhHienn/StudyMate-AI/issues"
+  },
+  "homepage": "https://github.com/NguyenMinhHienn/StudyMate-AI#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

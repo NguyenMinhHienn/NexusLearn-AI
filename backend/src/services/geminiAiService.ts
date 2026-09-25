@@ -82,15 +82,15 @@ Bạn là một chuyên gia giáo dục thiết kế lộ trình học tập t�
 Nhiệm vụ của bạn là phân tích tài liệu và tạo ra một khóa học E-learning hoàn chỉnh.
 
 Lưu ý quan trọng BẮT BUỘC tuân thủ:
-- TÀI LIỆU CÓ THỂ RẤT DÀI, HÃY PHÂN TÍCH TOÀN BỘ NỘI DUNG TỪ ĐẦU ĐẾN CUỐI VÀ KHÔNG ĐƯỢC BỎ SÓT.
+- TÀI LIỆU CÓ THỂ RẤT DÀI, HÃY CHỌN LỌC KIẾN THỨC CỐT LÕI NHẤT ĐỂ PHÂN TÍCH.
 - BẮT BUỘC PHẢI CÓ ĐỦ CẢ 3 LEVEL: "basic", "intermediate", "advanced" trong cả bài học và trắc nghiệm.
-- TẠO 2-3 BÀI HỌC (concepts) cho MỖI LEVEL. Tổng cộng khoảng 6-9 bài học.
-- TẠO 2-3 CÂU HỎI TRẮC NGHIỆM cho MỖI LEVEL. Tổng cộng khoảng 6-9 câu hỏi. Tránh các câu hỏi học thuộc lòng nhàm chán. Hãy tạo các câu hỏi tình huống, suy luận logic, phân tích sâu. Nâng dần độ khó một cách rõ rệt.
-- BẮT BUỘC viết 'summary' CHẤT LƯỢNG, thật chi tiết, khoảng 200-300 từ cho mỗi bài học. Hãy giải thích cặn kẽ như một người thầy tâm huyết, kèm theo ví dụ cụ thể, dễ hiểu. BẮT BUỘC sử dụng ký tự xuống dòng (\\n) để phân tách các đoạn văn, danh sách.
+- TẠO CHỈ 1-2 BÀI HỌC (concepts) cho MỖI LEVEL. Tổng cộng khoảng 3-5 bài học để tối ưu tốc độ.
+- TẠO CHỈ 1-2 CÂU HỎI TRẮC NGHIỆM cho MỖI LEVEL. Tổng cộng khoảng 3-5 câu hỏi. 
+- BẮT BUỘC viết 'summary' CHẤT LƯỢNG nhưng RÚT GỌN, khoảng 100-150 từ cho mỗi bài học. Trình bày bằng markdown. BẮT BUỘC sử dụng ký tự xuống dòng (\\n) để phân tách.
 - TUYỆT ĐỐI KHÔNG SỬ DỤNG DẤU NGOẶC KÉP (") bên trong phần summary và quiz (để không làm hỏng cấu trúc JSON). Nếu cần, hãy dùng dấu nháy đơn (') hoặc dấu backtick (\`).
-- Đảm bảo tạo ra 6-8 mối quan hệ (relationships) logic và chặt chẽ giữa các bài học để liên kết kiến thức.
+- Đảm bảo tạo ra 3-5 mối quan hệ (relationships).
 
-Nội dung tài liệu (Hãy đọc toàn bộ):
+Nội dung tài liệu:
 ${truncatedText}
 `;
 

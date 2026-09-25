@@ -162,11 +162,21 @@ export default function DocumentPage() {
     const concepts = groupedConcepts[level]
     const levelQuizzes = groupedQuizzes[level]
 
+    const containerVariants: any = {
+      hidden: { opacity: 0 },
+      visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+    }
+
+    const itemVariants: any = {
+      hidden: { opacity: 0, y: 20 },
+      visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+    }
+
     return (
       <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
         className="space-y-8"
       >
         {/* Knowledge Content */}
@@ -177,9 +187,10 @@ export default function DocumentPage() {
             </div>
           )}
           {concepts.map((concept: any, index: number) => (
-            <div key={concept.id} className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 sm:p-10 shadow-soft dark:shadow-none border border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-100 dark:border-slate-800">
-                <div className="w-12 h-12 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 rounded-2xl flex items-center justify-center font-bold text-xl">
+            <motion.div variants={itemVariants} key={concept.id} className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 sm:p-10 shadow-soft dark:shadow-none border border-slate-100 dark:border-slate-800 hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-indigo-900/10 transition-all duration-300 relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary-500/0 via-primary-500/5 to-primary-500/0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] rounded-[2rem] pointer-events-none"></div>
+              <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-100 dark:border-slate-800 relative z-10">
+                <div className="w-12 h-12 bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 rounded-2xl flex items-center justify-center font-bold text-xl group-hover:scale-110 group-hover:rotate-3 transition-transform">
                   {index + 1}
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">
@@ -187,14 +198,13 @@ export default function DocumentPage() {
                 </h3>
               </div>
               
-              {/* Markdown Content (Styled purely with Tailwind classes) */}
-              <div className="text-slate-700 dark:text-slate-300 leading-relaxed space-y-4">
-                {/* We map basic markdown tags to tailwind classes if we were using a custom renderer, but since we use standard react-markdown, we'll wrap it in a custom css class that we define here or global */}
+              {/* Markdown Content */}
+              <div className="text-slate-700 dark:text-slate-300 leading-relaxed space-y-4 relative z-10">
                 <div className="prose dark:prose-invert prose-indigo max-w-none prose-headings:font-bold prose-headings:text-slate-900 dark:prose-headings:text-white prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-li:text-slate-600 dark:prose-li:text-slate-300 prose-strong:text-primary-600 dark:prose-strong:text-primary-400">
                   <ReactMarkdown>{concept.summary}</ReactMarkdown>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
 

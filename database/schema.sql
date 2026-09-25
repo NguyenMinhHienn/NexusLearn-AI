@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS quiz_questions (
   options JSON NOT NULL, -- Dạng mảng chuỗi
   correct_answer INT NOT NULL, -- Index của đáp án đúng (0, 1, 2, 3)
   explanation TEXT,
+  level ENUM('basic', 'intermediate', 'advanced') DEFAULT 'basic',
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
@@ -66,6 +67,18 @@ CREATE TABLE IF NOT EXISTS user_concept_progress (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE,
   UNIQUE KEY unique_user_concept (user_id, concept_id)
+);
+
+-- Bảng User Level Progress
+CREATE TABLE IF NOT EXISTS user_level_progress (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  document_id INT NOT NULL,
+  level ENUM('basic', 'intermediate', 'advanced') NOT NULL,
+  is_completed BOOLEAN DEFAULT FALSE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_user_doc_level (user_id, document_id, level)
 );
 
 -- Bảng Cấu hình hệ thống (Settings)

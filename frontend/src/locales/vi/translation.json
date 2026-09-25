@@ -26,6 +26,28 @@
     "login": "Đăng nhập",
     "register": "Bắt đầu miễn phí"
   },
+  "dashboard": {
+    "hero_title": "Sẵn sàng chinh phục tri thức, {{name}}?",
+    "hero_desc": "AI đã xử lý xong các tài liệu mới nhất của bạn. Tóm tắt và sơ đồ tư duy đã sẵn sàng để bạn ôn tập ngay hôm nay.",
+    "premium": "Phiên bản Premium",
+    "upload_doc": "Tải lên tài liệu",
+    "review_now": "Ôn tập ngay",
+    "total_docs": "Tài liệu phân tích",
+    "total_concepts": "Khái niệm học được",
+    "total_quizzes": "Câu hỏi trắc nghiệm",
+    "completed_levels": "Chặng đã hoàn thành",
+    "learning_intensity": "Cường độ học tập",
+    "learning_intensity_desc": "Số liệu tương tác và phân tích 7 ngày qua",
+    "this_week": "Tuần này",
+    "skill_assessment": "Đánh giá Năng lực",
+    "level_proportion": "Tỷ trọng Cấp độ",
+    "recent_docs": "Tài liệu gần đây",
+    "view_all": "Xem tất cả",
+    "loading": "Đang tải dữ liệu...",
+    "delete_confirm": "Bạn có chắc muốn xóa tài liệu này không?",
+    "delete_error": "Lỗi khi xóa tài liệu",
+    "concepts": "khái niệm"
+  },
   "auth": {
     "login_title": "Đăng nhập",
     "login_subtitle": "Chào mừng trở lại NexusLearn AI",

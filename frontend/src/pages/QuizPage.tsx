@@ -141,6 +141,14 @@ export default function QuizPage() {
     )
   }
 
+  const askAIToExplain = () => {
+    const question = quiz.question;
+    const correctOpt = quiz.options[quiz.correctAnswer];
+    const userOpt = selected !== null ? quiz.options[selected] : "Không chọn";
+    const prompt = `Tại sao câu hỏi "${question}" lại có đáp án đúng là "${correctOpt}" thay vì "${userOpt}"? Hãy giải thích thật dễ hiểu cho tôi.`;
+    window.dispatchEvent(new CustomEvent('open-ai-chat', { detail: { prompt } }));
+  };
+
   const progressPercent = ((currentQ) / quizData.length) * 100
 
   return (
@@ -249,15 +257,25 @@ export default function QuizPage() {
                   animate={{ opacity: 1, y: 0, height: 'auto' }}
                   className="mb-8"
                 >
-                  <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-[1.5rem] p-6 sm:p-8 flex gap-4 sm:gap-6">
+                  <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-[1.5rem] p-6 sm:p-8 flex gap-4 sm:gap-6 flex-col sm:flex-row">
                     <div className="shrink-0 w-12 h-12 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center">
                       <Lightbulb size={24} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <h4 className="text-lg font-bold text-indigo-900 dark:text-indigo-300 mb-2">Giải thích chi tiết</h4>
-                      <p className="text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed text-lg">
+                      <p className="text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed text-lg mb-4">
                         {quiz.explanation}
                       </p>
+                      
+                      {selected !== quiz.correctAnswer && (
+                        <button 
+                          onClick={askAIToExplain}
+                          className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5"
+                        >
+                          <BrainCircuit size={18} />
+                          Nhờ AI giảng lại chi tiết
+                        </button>
+                      )}
                     </div>
                   </div>
                 </motion.div>

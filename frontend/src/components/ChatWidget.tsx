@@ -12,6 +12,7 @@ interface Message {
 
 export default function ChatWidget({ documentId }: { documentId: string }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [showIdleTooltip, setShowIdleTooltip] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -28,6 +29,58 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isOpen])
+
+  // Listen for custom events to auto-open chat and send a message
+  useEffect(() => {
+    const handleOpenChat = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setIsOpen(true);
+      if (customEvent.detail && customEvent.detail.prompt) {
+        // Only send if it's not currently loading
+        if (!loading) {
+          setInput(customEvent.detail.prompt);
+          // We can't directly call handleSend here because it relies on the latest state of input,
+          // so we simulate the flow or just set the input and let the user press send.
+          // Wait, better yet, we can pass it directly to the logic.
+          setTimeout(() => {
+             const sendBtn = document.getElementById('chat-send-btn');
+             if (sendBtn) sendBtn.click();
+          }, 100);
+        }
+      }
+    };
+
+    window.addEventListener('open-ai-chat', handleOpenChat);
+    return () => window.removeEventListener('open-ai-chat', handleOpenChat);
+  }, [loading]);
+
+  // Idle Timer (Proactive AI)
+  useEffect(() => {
+    let idleTimer: any;
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      if (!isOpen && !showIdleTooltip) {
+        idleTimer = setTimeout(() => {
+          setShowIdleTooltip(true);
+        }, 45000); // 45 seconds
+      }
+    };
+
+    window.addEventListener('mousemove', resetIdleTimer);
+    window.addEventListener('keydown', resetIdleTimer);
+    window.addEventListener('scroll', resetIdleTimer);
+
+    // Initial start
+    resetIdleTimer();
+
+    return () => {
+      clearTimeout(idleTimer);
+      window.removeEventListener('mousemove', resetIdleTimer);
+      window.removeEventListener('keydown', resetIdleTimer);
+      window.removeEventListener('scroll', resetIdleTimer);
+    };
+  }, [isOpen, showIdleTooltip]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return
@@ -61,12 +114,45 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true);
+          setShowIdleTooltip(false);
+        }}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-pink-500 to-rose-600 rounded-full flex items-center justify-center text-white shadow-2xl shadow-pink-500/40 hover:shadow-pink-500/60 hover:scale-110 transition-all z-40 group border-2 border-white/20"
       >
         <MessageSquare size={24} />
         <span className="absolute -top-2 -right-2 w-4 h-4 bg-amber-400 rounded-full border-2 border-white animate-pulse"></span>
       </button>
+
+      <AnimatePresence>
+        {showIdleTooltip && !isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 10, x: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10, x: 20 }}
+            className="fixed bottom-24 right-6 z-40 max-w-[250px]"
+          >
+            <div className="relative bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-4 rounded-2xl shadow-2xl border-2 border-pink-100 dark:border-pink-900/30">
+              <button 
+                onClick={() => setShowIdleTooltip(false)}
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={14} />
+              </button>
+              <div className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-500/20 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                  <Sparkles size={16} />
+                </div>
+                <div className="text-sm font-medium pr-4 cursor-pointer" onClick={() => { setIsOpen(true); setShowIdleTooltip(false); }}>
+                  Bạn có vẻ đang suy ngẫm? Cần mình giải thích hay tóm tắt phần nào không? 👋
+                </div>
+              </div>
+              {/* Arrow pointing down to the chat button */}
+              <div className="absolute -bottom-2 right-4 w-4 h-4 bg-white dark:bg-slate-800 border-b-2 border-r-2 border-pink-100 dark:border-pink-900/30 transform rotate-45"></div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isOpen && (
@@ -146,6 +232,7 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
                   disabled={loading}
                 />
                 <button
+                  id="chat-send-btn"
                   type="submit"
                   disabled={!input.trim() || loading}
                   className="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-500 transition-colors shrink-0"

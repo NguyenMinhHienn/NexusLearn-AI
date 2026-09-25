@@ -26,6 +26,28 @@
     "login": "Sign In",
     "register": "Start for free"
   },
+  "dashboard": {
+    "hero_title": "Ready to conquer knowledge, {{name}}?",
+    "hero_desc": "AI has finished processing your latest documents. Summaries and mind maps are ready for you to review today.",
+    "premium": "Premium Version",
+    "upload_doc": "Upload Document",
+    "review_now": "Review Now",
+    "total_docs": "Analyzed Documents",
+    "total_concepts": "Learned Concepts",
+    "total_quizzes": "Quiz Questions",
+    "completed_levels": "Completed Levels",
+    "learning_intensity": "Learning Intensity",
+    "learning_intensity_desc": "Interaction and analysis data over the past 7 days",
+    "this_week": "This Week",
+    "skill_assessment": "Skill Assessment",
+    "level_proportion": "Level Proportion",
+    "recent_docs": "Recent Documents",
+    "view_all": "View All",
+    "loading": "Loading data...",
+    "delete_confirm": "Are you sure you want to delete this document?",
+    "delete_error": "Error deleting document",
+    "concepts": "concepts"
+  },
   "auth": {
     "login_title": "Sign In",
     "login_subtitle": "Welcome back to NexusLearn AI",

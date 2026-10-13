@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai';
 import { jsonrepair } from 'jsonrepair';
 import pool from '../config/db';
 import { ResultSetHeader } from 'mysql2';
+import { addTokenUsage } from './quotaService';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -9,7 +10,38 @@ dotenv.config();
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-export const geminiAnalyzeDocument = async (documentId: number, documentText: string) => {
+export type AiLang = 'vi' | 'en';
+
+/** Normalise an Accept-Language / query value into a supported AI language. */
+export const resolveAiLang = (value?: string | string[] | null): AiLang => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw && raw.toLowerCase().startsWith('en') ? 'en' : 'vi';
+};
+
+const langDirective = (lang: AiLang) =>
+  lang === 'en'
+    ? '\n\nIMPORTANT: Always respond in ENGLISH, regardless of the language of the source material.'
+    : '\n\nQUAN TRỌNG: Luôn trả lời bằng TIẾNG VIỆT.';
+
+/**
+ * Gemini 2.5 "thinks" before answering by default; those hidden thought tokens are billed
+ * and were the bulk of the cost. Our tasks are structured extraction, so thinking is turned off.
+ */
+const NO_THINKING = { thinkingConfig: { thinkingBudget: 0 } } as any;
+
+/** Max characters of source text sent for analysis (~10k tokens). Longer docs are trimmed to the core. */
+export const MAX_ANALYZE_CHARS = 30000;
+
+/** Only the most recent turns are sent as chat history to keep each question cheap. */
+export const MAX_HISTORY_TURNS = 10;
+const trimHistory = <T extends { role: string }>(history: T[]) => {
+  const recent = history.slice(-MAX_HISTORY_TURNS);
+  // Gemini requires the history to start with a user turn
+  while (recent.length && recent[0].role !== 'user') recent.shift();
+  return recent;
+};
+
+export const geminiAnalyzeDocument = async (documentId: number, documentText: string, userId: number, lang: AiLang = 'vi') => {
   try {
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not configured in .env file');
@@ -69,12 +101,12 @@ export const geminiAnalyzeDocument = async (documentId: number, documentText: st
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        maxOutputTokens: 8192
+        maxOutputTokens: 8192,
+        ...NO_THINKING
       }
     });
-    const MAX_TEXT_LENGTH = 500000;
-    const truncatedText = documentText.length > MAX_TEXT_LENGTH
-      ? documentText.substring(0, MAX_TEXT_LENGTH) + '...'
+    const truncatedText = documentText.length > MAX_ANALYZE_CHARS
+      ? documentText.substring(0, MAX_ANALYZE_CHARS) + '...'
       : documentText;
 
     const prompt = `
@@ -89,6 +121,7 @@ Lưu ý quan trọng BẮT BUỘC tuân thủ:
 - BẮT BUỘC viết 'summary' CHẤT LƯỢNG nhưng RÚT GỌN, khoảng 100-150 từ cho mỗi bài học. Trình bày bằng markdown. BẮT BUỘC sử dụng ký tự xuống dòng (\\n) để phân tách.
 - TUYỆT ĐỐI KHÔNG SỬ DỤNG DẤU NGOẶC KÉP (") bên trong phần summary và quiz (để không làm hỏng cấu trúc JSON). Nếu cần, hãy dùng dấu nháy đơn (') hoặc dấu backtick (\`).
 - Đảm bảo tạo ra 3-5 mối quan hệ (relationships).
+${lang === 'en' ? '- WRITE ALL OUTPUT (lesson names, summaries, relationship labels, quiz questions, options and explanations) IN ENGLISH.' : '- Viết toàn bộ nội dung đầu ra bằng tiếng Việt.'}
 
 Nội dung tài liệu:
 ${truncatedText}
@@ -163,6 +196,11 @@ ${truncatedText}
         );
       }
     }
+    
+    // Deduct actual tokens used
+    const tokensUsed = response.usageMetadata?.totalTokenCount || 1500;
+    await addTokenUsage(userId, tokensUsed);
+    
     await pool.query('UPDATE documents SET status = ? WHERE id = ?', ['analyzed', documentId]);
 
   } catch (error) {
@@ -171,7 +209,7 @@ ${truncatedText}
   }
 };
 
-export const geminiChatWithDocument = async (documentContext: string, userMessage: string, chatHistory: { role: string, text: string }[] = []) => {
+export const geminiChatWithDocument = async (documentContext: string, userMessage: string, chatHistory: { role: string, text: string }[] = [], lang: AiLang = 'vi') => {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
   
   const model = genAI.getGenerativeModel({
@@ -181,10 +219,11 @@ Nhiệm vụ của bạn:
 1. Giải đáp thắc mắc của học sinh chủ yếu dựa trên TÀI LIỆU được cung cấp bên dưới.
 2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế.
 3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
-4. YÊU CẦU ĐẶC BIỆT: Phải luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo. Dù học sinh có nói tục, chửi thề, trêu chọc hay hỏi những câu không liên quan, bạn BẮT BUỘC phải giữ thái độ điềm tĩnh, lịch sự từ chối trả lời những nội dung độc hại đó, và khéo léo hướng học sinh quay lại bài học. Tuyệt đối không bao giờ được tức giận hay hùa theo.`,
+4. YÊU CẦU ĐẶC BIỆT: Phải luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo. Dù học sinh có nói tục, chửi thề, trêu chọc hay hỏi những câu không liên quan, bạn BẮT BUỘC phải giữ thái độ điềm tĩnh, lịch sự từ chối trả lời những nội dung độc hại đó, và khéo léo hướng học sinh quay lại bài học. Tuyệt đối không bao giờ được tức giận hay hùa theo.${langDirective(lang)}`,
+    generationConfig: NO_THINKING,
   });
 
-  const history = chatHistory.map(msg => ({
+  const history = trimHistory(chatHistory).map(msg => ({
     role: msg.role === 'user' ? 'user' : 'model',
     parts: [{ text: msg.text }]
   }));
@@ -193,10 +232,12 @@ Nhiệm vụ của bạn:
 
   const prompt = `--- BỐI CẢNH TÀI LIỆU (Chỉ dùng để tham khảo trả lời) ---\n${documentContext}\n\n--- CÂU HỎI CỦA HỌC SINH ---\n${userMessage}`;
   const result = await chat.sendMessage(prompt);
-  return result.response.text();
+  const response = await result.response;
+  const tokensUsed = response.usageMetadata?.totalTokenCount || 50;
+  return { text: response.text(), tokensUsed };
 };
 
-export const geminiGenerateFlashcards = async (documentContext: string) => {
+export const geminiGenerateFlashcards = async (documentContext: string, lang: AiLang = 'vi') => {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
   
   const schema: Schema = {
@@ -214,35 +255,39 @@ export const geminiGenerateFlashcards = async (documentContext: string) => {
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    systemInstruction: "Bạn là chuyên gia giáo dục. Nhiệm vụ của bạn là đọc toàn bộ nội dung tài liệu và trích xuất ra 10-15 THUẬT NGỮ (hoặc khái niệm cốt lõi) quan trọng nhất kèm theo ĐỊNH NGHĨA ngắn gọn, dễ hiểu để làm bộ thẻ ghi nhớ (Flashcards). Trả về mảng JSON chuẩn.",
+    systemInstruction: "Bạn là chuyên gia giáo dục. Nhiệm vụ của bạn là đọc toàn bộ nội dung tài liệu và trích xuất ra 10-15 THUẬT NGỮ (hoặc khái niệm cốt lõi) quan trọng nhất kèm theo ĐỊNH NGHĨA ngắn gọn, dễ hiểu để làm bộ thẻ ghi nhớ (Flashcards). Trả về mảng JSON chuẩn." + langDirective(lang),
     generationConfig: {
       responseMimeType: "application/json",
-      responseSchema: schema
+      responseSchema: schema,
+      ...NO_THINKING
     }
   });
 
   const result = await model.generateContent(`Trích xuất flashcards từ tài liệu sau:\n\n${documentContext}`);
-  let text = result.response.text();
+  const response = await result.response;
+  let text = response.text();
+  const tokensUsed = response.usageMetadata?.totalTokenCount || 200;
   text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   
   try {
-    return JSON.parse(jsonrepair(text));
+    return { data: JSON.parse(jsonrepair(text)), tokensUsed };
   } catch (error) {
     console.error('Error parsing flashcards JSON:', error);
-    return [];
+    return { data: [], tokensUsed };
   }
 };
 
-export const geminiGlobalChat = async (message: string, history: { role: 'user' | 'model', text: string }[]) => {
+export const geminiGlobalChat = async (message: string, history: { role: 'user' | 'model', text: string }[], lang: AiLang = 'vi') => {
   try {
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.5-flash',
       systemInstruction: `Bạn là Trợ lý ảo AI của NexusLearn - một nền tảng E-learning tiên tiến.
-Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và lịch sự. Trả lời bằng tiếng Việt.`
+Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và lịch sự.${langDirective(lang)}`,
+      generationConfig: NO_THINKING,
     });
 
     const chatSession = model.startChat({
-      history: history.map(m => ({
+      history: trimHistory(history).map(m => ({
         role: m.role,
         parts: [{ text: m.text }]
       }))
@@ -256,3 +301,50 @@ Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và l�
     throw error;
   }
 };
+
+export const geminiReviewChat = async (
+  message: string, 
+  history: { role: 'user' | 'model', text: string }[], 
+  documentContexts: { title: string, content: string }[],
+  lang: AiLang = 'vi'
+) => {
+  try {
+    const contextBlock = documentContexts.map(d => 
+      `=== TÀI LIỆU: "${d.title}" ===\n${d.content}`
+    ).join('\n\n');
+
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      systemInstruction: `Bạn là Gia Sư Ôn Tập Thông Minh (Smart Review Tutor) của NexusLearn.
+
+NGUYÊN TẮC BẮT BUỘC:
+1. Bạn CHỈ ĐƯỢC trả lời dựa trên nội dung các TÀI LIỆU bên dưới. KHÔNG ĐƯỢC bịa thêm kiến thức ngoài.
+2. Nếu câu hỏi KHÔNG liên quan đến nội dung tài liệu, hãy lịch sự từ chối và gợi ý người dùng hỏi về nội dung trong tài liệu.
+3. Khi trả lời, hãy TRÍCH DẪN hoặc tham chiếu đến phần nào trong tài liệu để tăng độ tin cậy.
+4. Sử dụng Markdown và emoji cho câu trả lời sinh động.
+5. ${lang === 'en' ? 'Respond in English unless the user explicitly asks otherwise.' : 'Trả lời bằng tiếng Việt trừ khi người dùng yêu cầu khác.'}
+6. Luôn giữ thái độ lịch sự, chuẩn mực của một người thầy/cô giáo.
+
+--- NỘI DUNG TÀI LIỆU ---
+${contextBlock}
+--- HẾT NỘI DUNG TÀI LIỆU ---`,
+      generationConfig: NO_THINKING,
+    });
+
+    const chatSession = model.startChat({
+      history: trimHistory(history).map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }))
+    });
+
+    const result = await chatSession.sendMessage([{ text: message }]);
+    const response = await result.response;
+    const tokensUsed = response.usageMetadata?.totalTokenCount || 50;
+    return { text: response.text(), tokensUsed };
+  } catch (error) {
+    console.error('Lỗi khi gọi Gemini Review Chat:', error);
+    throw error;
+  }
+};
+

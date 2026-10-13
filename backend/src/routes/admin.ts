@@ -3,11 +3,13 @@ import pool from '../config/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 import { RowDataPacket } from 'mysql2';
+import { resetExpiredQuotas } from '../services/quotaService';
 
 const router = Router();
 router.get('/users', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const [users] = await pool.query<RowDataPacket[]>('SELECT id, name, email, role, token_quota, tokens_used, created_at FROM users ORDER BY created_at DESC');
+    await resetExpiredQuotas();
+    const [users] = await pool.query<RowDataPacket[]>('SELECT id, name, email, role, token_quota, tokens_used, last_quota_reset, created_at FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (error) {
     console.error('Lỗi lấy danh sách users:', error);
@@ -72,7 +74,7 @@ router.get('/stats', authenticateToken, requireAdmin, async (req: Request, res: 
 });
 router.get('/settings', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const [settings] = await pool.query<RowDataPacket[]>('SELECT * FROM system_settings');
+    const [settings] = await pool.query<RowDataPacket[]>("SELECT * FROM system_settings WHERE setting_key NOT LIKE '\\_%'");
     res.json(settings);
   } catch (error) {
     console.error('Lỗi lấy cấu hình:', error);
@@ -87,7 +89,11 @@ router.put('/settings', authenticateToken, requireAdmin, async (req: Request, re
     }
 
     for (const item of settings) {
-      await pool.query('UPDATE system_settings SET setting_value = ? WHERE setting_key = ?', [item.setting_value, item.setting_key]);
+      if (!item?.setting_key) continue;
+      await pool.query(
+        'INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+        [item.setting_key, String(item.setting_value ?? '')]
+      );
     }
     
     res.json({ message: 'Cập nhật cấu hình thành công' });

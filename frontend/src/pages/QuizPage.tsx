@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, XCircle, ArrowRight, BrainCircuit, Target, Lightbulb, Trophy } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { ArrowLeft, CheckCircle2, XCircle, ArrowRight, BrainCircuit, Target, Lightbulb, Trophy, RotateCcw } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import confetti from 'canvas-confetti' // Optionally we can add a confetti effect if we install it, but we can just use Framer motion for celebration instead.
+import confetti from 'canvas-confetti'
+import ChatWidget from '../components/ChatWidget'
 
 export default function QuizPage() {
   const { id } = useParams()
+  const { t } = useTranslation()
   const [quizData, setQuizData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [currentQ, setCurrentQ] = useState(0)
@@ -16,44 +19,30 @@ export default function QuizPage() {
   const [finished, setFinished] = useState(false)
 
   useEffect(() => {
+    setLoading(true)
     axios.get(`/api/documents/${id}/quiz`)
-      .then(res => setQuizData(res.data))
+      .then(res => setQuizData(Array.isArray(res.data) ? res.data : []))
       .catch(err => console.error(err))
       .finally(() => setLoading(false))
   }, [id])
 
-  // Fire confetti when finished with a good score
-  useEffect(() => {
-    if (finished && quizData.length > 0) {
-      const percent = Math.round((score / quizData.length) * 100)
-      if (percent >= 80) {
-        import('canvas-confetti').then((confetti) => {
-          confetti.default({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 }
-          })
-        }).catch(() => {})
-      }
-    }
-  }, [finished, score, quizData])
-
   if (loading) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <div className="w-16 h-16 bg-primary-50 dark:bg-primary-500/10 rounded-2xl flex items-center justify-center mb-6 animate-pulse">
-          <BrainCircuit className="text-primary-500" size={32} />
-        </div>
-        <p className="text-slate-500 font-medium">Đang tải ngân hàng câu hỏi...</p>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4 animate-pulse">
+        <div className="w-8 h-8 border border-[var(--border-color)] border-t-[var(--text-main)] rounded-full animate-spin"></div>
+        <p className="text-sm text-[var(--text-muted)] uppercase tracking-widest font-medium">{t('quiz.loading')}</p>
       </div>
     )
   }
 
   if (!quizData || quizData.length === 0) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <Target className="text-slate-300 dark:text-slate-700 mb-4" size={48} />
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Không có câu hỏi nào cho tài liệu này.</h2>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center text-center px-4">
+        <Target className="text-[var(--text-muted)] mb-4" size={48} />
+        <h2 className="text-lg font-medium text-[var(--text-main)] mb-6">{t('quiz.empty')}</h2>
+        <Link to={`/app/documents/${id}`} className="px-5 py-2.5 text-sm font-medium border border-[var(--border-color)] text-[var(--text-main)] hover:border-[var(--text-muted)] rounded transition-colors">
+          {t('common.back_to_document')}
+        </Link>
       </div>
     )
   }
@@ -77,7 +66,17 @@ export default function QuizPage() {
       setShowResult(false)
     } else {
       setFinished(true)
+      axios.post(`/api/documents/${id}/quiz/attempt`, { score, total: quizData.length }).catch(() => {})
+      if (score / quizData.length >= 0.8) confetti({ particleCount: 120, spread: 75, origin: { y: 0.6 } })
     }
+  }
+
+  const handleRetry = () => {
+    setCurrentQ(0)
+    setSelected(null)
+    setShowResult(false)
+    setScore(0)
+    setFinished(false)
   }
 
   if (finished) {
@@ -85,54 +84,42 @@ export default function QuizPage() {
     
     return (
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
         className="max-w-2xl mx-auto py-12 px-4"
       >
-        <div className="glass-card bg-white/80 dark:bg-slate-900/80 rounded-[3rem] p-10 sm:p-16 text-center border-2 border-slate-100 dark:border-slate-800 shadow-2xl relative overflow-hidden">
-          {/* Background decoration */}
-          <div className="absolute top-[-20%] left-[-10%] w-[300px] h-[300px] bg-primary-500/20 rounded-full mix-blend-screen filter blur-[80px]"></div>
-          <div className="absolute bottom-[-20%] right-[-10%] w-[300px] h-[300px] bg-emerald-500/20 rounded-full mix-blend-screen filter blur-[80px]"></div>
-
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded p-10 sm:p-16 text-center">
           <div className="relative z-10">
-            <motion.div 
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", bounce: 0.5, delay: 0.2 }}
-              className={`w-32 h-32 mx-auto rounded-[2rem] flex items-center justify-center mb-8 shadow-xl ${
-                percent >= 80 ? 'bg-gradient-to-br from-amber-300 to-orange-500 text-white' :
-                percent >= 50 ? 'bg-gradient-to-br from-primary-400 to-indigo-600 text-white' :
-                'bg-gradient-to-br from-slate-200 to-slate-400 dark:from-slate-700 dark:to-slate-800 text-slate-600 dark:text-slate-300'
-              }`}
-            >
-              <Trophy size={64} />
-            </motion.div>
+            <div className={`w-24 h-24 mx-auto rounded flex items-center justify-center mb-8 bg-[var(--text-main)] text-[var(--bg-main)]`}>
+              <Trophy size={40} />
+            </div>
 
-            <h1 className="text-3xl sm:text-4xl font-heading font-black text-slate-900 dark:text-white mb-2">
-              Kết quả Tổng bài
+            <h1 className="text-[28px] font-heading font-semibold text-[var(--text-main)] mb-2">
+              {t('quiz.result_title')}
             </h1>
             
             <div className="py-8">
-              <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-primary-500 to-indigo-600 tracking-tighter mb-4">
+              <div className="text-6xl font-heading font-semibold text-[var(--text-main)] tabular-nums mb-4">
                 {percent}%
               </div>
-              <p className="text-xl font-bold text-slate-700 dark:text-slate-300">
-                Chính xác {score} trên tổng số {quizData.length} câu
+              <p className="text-base font-medium text-[var(--text-muted)]">
+                {t('quiz.result_detail', { score, total: quizData.length })}
               </p>
             </div>
 
-            <p className="text-lg text-slate-500 dark:text-slate-400 mb-10 max-w-sm mx-auto">
-              {percent >= 80 ? 'Tuyệt đỉnh! Kiến thức của bạn cực kỳ vững chắc.' :
-               percent >= 50 ? 'Khá tốt! Nhưng vẫn còn một vài lỗ hổng cần vá lại.' :
-               'Chưa đạt yêu cầu. Bạn cần phải học lại từ đầu phần này.'}
+            <p className="text-sm text-[var(--text-muted)] mb-10 max-w-sm mx-auto">
+              {percent >= 80 ? t('quiz.great') : percent >= 50 ? t('quiz.good') : t('quiz.bad')}
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to={`/app/documents/${id}`} className="w-full sm:w-auto px-8 py-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl font-bold transition-colors">
-                Xem lại tài liệu
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button id="quiz-retry" onClick={handleRetry} className="w-full sm:w-auto px-6 py-3 border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--border-color)] rounded font-medium transition-colors text-sm flex items-center justify-center gap-2">
+                <RotateCcw size={15} /> {t('quiz.retry')}
+              </button>
+              <Link to={`/app/documents/${id}`} className="w-full sm:w-auto px-6 py-3 border border-[var(--border-color)] text-[var(--text-main)] hover:bg-[var(--border-color)] rounded font-medium transition-colors text-sm">
+                {t('quiz.review_doc')}
               </Link>
-              <Link to={`/app/documents/${id}/map`} className="w-full sm:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-500 text-white rounded-2xl font-bold transition-transform hover:-translate-y-1 shadow-lg shadow-primary-500/30">
-                Về sơ đồ học tập
+              <Link to={`/app/documents/${id}/map`} className="w-full sm:w-auto px-6 py-3 bg-[var(--text-main)] text-[var(--bg-main)] hover:opacity-90 rounded font-medium transition-opacity text-sm">
+                {t('quiz.go_map')}
               </Link>
             </div>
           </div>
@@ -144,26 +131,26 @@ export default function QuizPage() {
   const askAIToExplain = () => {
     const question = quiz.question;
     const correctOpt = quiz.options[quiz.correctAnswer];
-    const userOpt = selected !== null ? quiz.options[selected] : "Không chọn";
-    const prompt = `Tại sao câu hỏi "${question}" lại có đáp án đúng là "${correctOpt}" thay vì "${userOpt}"? Hãy giải thích thật dễ hiểu cho tôi.`;
+    const userOpt = selected !== null ? quiz.options[selected] : t('quiz.no_choice');
+    const prompt = t('quiz.ai_prompt', { question, correct: correctOpt, chosen: userOpt });
     window.dispatchEvent(new CustomEvent('open-ai-chat', { detail: { prompt } }));
   };
 
   const progressPercent = ((currentQ) / quizData.length) * 100
 
   return (
-    <div className="max-w-3xl mx-auto py-6 px-4 min-h-[80vh] flex flex-col">
+    <div className="max-w-3xl mx-auto py-8 px-4 sm:px-8 min-h-[80vh] flex flex-col">
       {/* Quiz Header */}
-      <div className="flex items-center justify-between mb-8">
-        <Link to={`/app/documents/${id}`} className="inline-flex items-center gap-2 text-slate-500 hover:text-primary-500 font-semibold transition-colors">
-          <ArrowLeft size={20} /> Thoát
+      <div className="flex items-center justify-between mb-12">
+        <Link to={`/app/documents/${id}`} className="inline-flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors uppercase tracking-wider">
+          <ArrowLeft size={14} /> {t('quiz.exit')}
         </Link>
-        <div className="flex items-center gap-4">
-          <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-            Tiến độ
+        <div className="flex items-center gap-4 border border-[var(--border-color)] px-4 py-2 rounded bg-[var(--bg-surface)]">
+          <div className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">
+            {t('quiz.progress')}
           </div>
-          <div className="text-lg font-black text-slate-900 dark:text-white bg-white dark:bg-slate-800 px-4 py-1 rounded-full shadow-sm">
-            {currentQ + 1} <span className="text-slate-400">/ {quizData.length}</span>
+          <div className="text-sm font-semibold text-[var(--text-main)] tabular-nums">
+            {currentQ + 1} <span className="text-[var(--text-muted)] font-normal">/ {quizData.length}</span>
           </div>
         </div>
       </div>
@@ -173,37 +160,37 @@ export default function QuizPage() {
         <AnimatePresence mode="wait">
           <motion.div
             key={currentQ}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
             className="flex-1 flex flex-col"
           >
             {/* Question Card */}
-            <div className="mb-8">
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white leading-tight">
+            <div className="mb-10">
+              <h2 className="text-xl sm:text-2xl font-medium text-[var(--text-main)] leading-relaxed">
                 {quiz.question}
               </h2>
             </div>
 
             {/* Options */}
-            <div className="space-y-4 mb-8">
+            <div className="space-y-3 mb-8">
               {quiz.options.map((opt: string, idx: number) => {
-                let btnClass = "w-full text-left p-6 sm:p-8 rounded-2xl border-2 transition-all duration-300 text-lg sm:text-xl font-medium relative overflow-hidden group "
+                let btnClass = "w-full text-left p-4 sm:p-6 rounded border transition-colors text-base font-medium flex items-center gap-4 "
                 
                 if (showResult) {
                   if (idx === quiz.correctAnswer) {
-                    btnClass += "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 scale-[1.02] shadow-lg shadow-emerald-500/20 z-10"
+                    btnClass += "border-[var(--text-main)] bg-[var(--text-main)] text-[var(--bg-main)]"
                   } else if (idx === selected) {
-                    btnClass += "border-danger bg-red-50 dark:bg-red-500/10 text-danger"
+                    btnClass += "border-red-500/50 bg-red-500/10 text-red-500"
                   } else {
-                    btnClass += "border-slate-200 dark:border-slate-800 bg-transparent text-slate-400 dark:text-slate-500 opacity-60"
+                    btnClass += "border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] opacity-50"
                   }
                 } else {
                   if (idx === selected) {
-                    btnClass += "border-primary-500 bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300 scale-[1.02]"
+                    btnClass += "border-[var(--text-main)] bg-[var(--border-color)] text-[var(--text-main)]"
                   } else {
-                    btnClass += "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-md"
+                    btnClass += "border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-main)] hover:border-[var(--text-muted)]"
                   }
                 }
 
@@ -214,36 +201,27 @@ export default function QuizPage() {
                     onClick={() => handleSelect(idx)}
                     disabled={showResult}
                   >
-                    {!showResult && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-primary-500/0 via-primary-500/5 to-primary-500/0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                    )}
-                    <div className="flex items-center gap-6 relative z-10">
-                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-bold text-lg border-2 transition-colors ${
-                        showResult 
-                          ? idx === quiz.correctAnswer 
-                            ? 'border-emerald-500 bg-emerald-500 text-white'
-                            : idx === selected 
-                              ? 'border-danger bg-danger text-white'
-                              : 'border-slate-300 dark:border-slate-700 text-slate-400'
-                          : idx === selected
-                            ? 'border-primary-500 bg-primary-500 text-white'
-                            : 'border-slate-300 dark:border-slate-700 text-slate-400 group-hover:border-primary-400'
-                      }`}>
-                        {String.fromCharCode(65 + idx)}
-                      </div>
-                      <span className="flex-1">{opt}</span>
-                      
-                      {showResult && idx === quiz.correctAnswer && (
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                          <CheckCircle2 className="text-emerald-500" size={28} />
-                        </motion.div>
-                      )}
-                      {showResult && idx === selected && idx !== quiz.correctAnswer && (
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                          <XCircle className="text-danger" size={28} />
-                        </motion.div>
-                      )}
+                    <div className={`w-8 h-8 shrink-0 rounded flex items-center justify-center font-bold text-sm border transition-colors ${
+                      showResult 
+                        ? idx === quiz.correctAnswer 
+                          ? 'border-[var(--bg-main)] bg-[var(--text-main)] text-[var(--bg-main)]'
+                          : idx === selected 
+                            ? 'border-red-500 bg-red-500/20 text-red-500'
+                            : 'border-[var(--border-color)] text-[var(--text-muted)]'
+                        : idx === selected
+                          ? 'border-[var(--text-main)] text-[var(--text-main)]'
+                          : 'border-[var(--border-color)] text-[var(--text-muted)]'
+                    }`}>
+                      {String.fromCharCode(65 + idx)}
                     </div>
+                    <span className="flex-1">{opt}</span>
+                    
+                    {showResult && idx === quiz.correctAnswer && (
+                      <CheckCircle2 className="text-[var(--bg-main)]" size={20} />
+                    )}
+                    {showResult && idx === selected && idx !== quiz.correctAnswer && (
+                      <XCircle className="text-red-500" size={20} />
+                    )}
                   </button>
                 )
               })}
@@ -253,27 +231,28 @@ export default function QuizPage() {
             <AnimatePresence>
               {showResult && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 20, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
                   className="mb-8"
                 >
-                  <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-[1.5rem] p-6 sm:p-8 flex gap-4 sm:gap-6 flex-col sm:flex-row">
-                    <div className="shrink-0 w-12 h-12 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center">
-                      <Lightbulb size={24} />
+                  <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded p-6 flex gap-4">
+                    <div className="shrink-0 w-10 h-10 bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)] rounded flex items-center justify-center">
+                      <Lightbulb size={20} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-lg font-bold text-indigo-900 dark:text-indigo-300 mb-2">Giải thích chi tiết</h4>
-                      <p className="text-indigo-800/80 dark:text-indigo-200/80 leading-relaxed text-lg mb-4">
+                      <h4 className="text-sm font-semibold text-[var(--text-main)] mb-1 uppercase tracking-wider">{t('quiz.explanation')}</h4>
+                      <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-4">
                         {quiz.explanation}
                       </p>
                       
                       {selected !== quiz.correctAnswer && (
                         <button 
+                          id="quiz-ask-ai"
                           onClick={askAIToExplain}
-                          className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5"
+                          className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[var(--text-main)] hover:opacity-90 text-[var(--bg-main)] font-medium rounded text-xs transition-opacity"
                         >
-                          <BrainCircuit size={18} />
-                          Nhờ AI giảng lại chi tiết
+                          <BrainCircuit size={14} />
+                          {t('quiz.ask_ai')}
                         </button>
                       )}
                     </div>
@@ -287,48 +266,43 @@ export default function QuizPage() {
       </div>
 
       {/* Footer Navigation Area */}
-      <div className="sticky bottom-0 py-6 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 -mx-4 px-4 sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:static">
-        
-        {/* Progress bar container */}
-        <div className="absolute top-0 left-0 right-0 h-1 sm:hidden">
-           <div className="h-full bg-primary-500 transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
-        </div>
-
-        <div className="flex items-center justify-between max-w-3xl mx-auto w-full">
-          <div className="hidden sm:block flex-1 mr-8">
-            <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+      <div className="pt-6 border-t border-[var(--border-color)]">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 mr-8">
+            <div className="h-1 w-full bg-[var(--border-color)] rounded-full overflow-hidden">
               <motion.div 
-                className="h-full bg-primary-500 rounded-full"
+                className="h-full bg-[var(--text-main)] rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${progressPercent}%` }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.3 }}
               />
             </div>
           </div>
 
-          <div className="flex-1 sm:flex-none flex justify-end">
+          <div className="flex shrink-0">
             {showResult ? (
               <button 
-                className="w-full sm:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-transform hover:-translate-y-1 shadow-lg shadow-primary-500/30"
+                className="px-6 py-2.5 bg-[var(--text-main)] hover:opacity-90 text-[var(--bg-main)] rounded font-medium text-sm flex items-center gap-2 transition-opacity"
                 onClick={handleNext}
               >
                 {currentQ < quizData.length - 1 ? (
-                  <>Tiếp tục <ArrowRight size={20} /></>
+                  <>{t('quiz.next')} <ArrowRight size={16} /></>
                 ) : (
-                  <>Hoàn thành <Trophy size={20} /></>
+                  <>{t('quiz.finish')} <Trophy size={16} /></>
                 )}
               </button>
             ) : (
               <button 
-                className="w-full sm:w-auto px-8 py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed rounded-2xl font-bold text-lg flex items-center justify-center gap-3"
+                className="px-6 py-2.5 bg-[var(--border-color)] text-[var(--text-muted)] cursor-not-allowed rounded font-medium text-sm flex items-center gap-2"
                 disabled
               >
-                Chọn một đáp án
+                {t('quiz.choose')}
               </button>
             )}
           </div>
         </div>
       </div>
+      <ChatWidget documentId={id || ''} />
     </div>
   )
 }

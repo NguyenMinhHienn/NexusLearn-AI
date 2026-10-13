@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Mail, Lock, User, Loader2, Sparkles, BrainCircuit, ArrowRight } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import AuthParticles from '../components/AuthParticles'
+import { Loader2, ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const fadeUp: any = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 15 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: 0.08 * i, duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+    transition: { delay: i * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] },
   }),
 }
+
+const features = ['auth.feature_1', 'auth.feature_2', 'auth.feature_3']
 
 export default function RegisterPage() {
   const { t } = useTranslation()
@@ -24,25 +25,14 @@ export default function RegisterPage() {
   const [agreeTerms, setAgreeTerms] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [activeFeature, setActiveFeature] = useState(0)
+  const [featureIndex, setFeatureIndex] = useState(0)
   const { register } = useAuth()
   const navigate = useNavigate()
 
-  const features = [
-    {
-      title: "Mind Map AI",
-      desc: "Tự động phân tích và tạo sơ đồ tư duy trực quan từ tài liệu phức tạp của bạn."
-    },
-    {
-      title: "Flashcard Thông Minh",
-      desc: "Sinh thẻ ghi nhớ và câu hỏi trắc nghiệm bám sát nội dung, tối ưu hóa quá trình ôn tập."
-    }
-  ]
-
   useEffect(() => {
     const timer = setInterval(() => {
-      setActiveFeature((prev) => (prev + 1) % features.length)
-    }, 5000)
+      setFeatureIndex(prev => (prev + 1) % features.length)
+    }, 4000)
     return () => clearInterval(timer)
   }, [])
 
@@ -51,11 +41,11 @@ export default function RegisterPage() {
     setError('')
     
     if (password !== confirmPassword) {
-      setError('Password confirmation does not match!')
+      setError(t('auth.password_mismatch'))
       return
     }
     if (!agreeTerms) {
-      setError('You must agree to the Terms of Service!')
+      setError(t('auth.must_agree'))
       return
     }
 
@@ -64,210 +54,164 @@ export default function RegisterPage() {
       await register(name, email, password)
       navigate('/app')
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed')
+      setError(err.response?.data?.message || t('auth.register_failed'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen bg-[#050505] text-white flex-row-reverse">
-      {/* Left Side - Form (Takes 1/2 on Desktop, Full on Mobile) -> Reversed to right side visually */}
-      <div className="w-full lg:w-1/2 flex flex-col relative z-10">
+    <div className="min-h-screen bg-[var(--bg-main)] flex flex-col md:flex-row-reverse">
+      {/* Right Side (Visual Left) - Typography & Grid (Hidden on mobile) */}
+      <div className="hidden md:flex w-1/2 relative bg-[var(--bg-surface)] border-l border-[var(--border-color)] overflow-hidden items-center justify-center p-12">
+        <div className="absolute inset-0 bg-grid-pattern opacity-40" style={{ maskImage: 'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)' }}></div>
         
-        {/* Dynamic Particles behind the form side */}
-        <div className="absolute inset-0 z-0 opacity-40">
-          <AuthParticles />
-        </div>
-        
-        <div className="absolute top-0 right-0 lg:left-0 p-8 z-20 w-full flex justify-between lg:justify-start">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 group-hover:border-cyan-500 transition-colors">
-              <img src="/logo.jpg" alt="NexusLearn Logo" className="w-full h-full object-cover" />
+        <div className="relative z-10 w-full max-w-lg">
+          <Link to="/" className="flex items-center gap-3 group mb-20">
+            <div className="w-10 h-10 bg-transparent rounded-lg overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
+              <img src="/logo.jpg" alt="NexusLearn" className="w-full h-full object-cover" />
             </div>
-            <span className="font-heading font-bold text-xl tracking-tight">NexusLearn</span>
+            <span className="font-heading font-semibold text-2xl tracking-tight text-[var(--text-main)]">NexusLearn</span>
           </Link>
-        </div>
 
-        <div className="flex-1 flex items-center justify-center p-8 sm:p-12 relative z-10">
-          <motion.div 
-            initial="hidden" 
-            animate="visible" 
-            className="w-full max-w-[420px]"
-          >
-            <motion.div custom={0} variants={fadeUp} className="mb-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium mb-6">
-                <Sparkles size={14} /> Khởi đầu mới
-              </div>
-              <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">{t('auth.register_title')}</h1>
-              <p className="text-slate-400 text-lg">{t('auth.register_subtitle')}</p>
-            </motion.div>
-
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl p-4 mb-6"
+          <div className="min-h-[160px] relative">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={featureIndex}
+                initial={{ opacity: 0, x: -10, filter: 'blur(4px)' }}
+                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, x: 10, filter: 'blur(4px)' }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-0"
               >
-                {error}
+                <h1 className="text-4xl lg:text-5xl font-heading font-semibold tracking-tight leading-[1.2] text-[var(--text-main)]">
+                  {t(features[featureIndex])}
+                </h1>
               </motion.div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <motion.div custom={1} variants={fadeUp}>
-                <label className="text-sm font-medium text-slate-300 ml-1 mb-1 block">Họ và tên</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                    <User size={18} className="text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
-                  </div>
-                  <input
-                    type="text"
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all text-white placeholder:text-slate-600"
-                    placeholder={t('auth.name_placeholder')}
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    required
-                  />
-                </div>
-              </motion.div>
-
-              <motion.div custom={2} variants={fadeUp}>
-                <label className="text-sm font-medium text-slate-300 ml-1 mb-1 block">Email</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                    <Mail size={18} className="text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
-                  </div>
-                  <input
-                    type="email"
-                    className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all text-white placeholder:text-slate-600"
-                    placeholder={t('auth.email_placeholder')}
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-              </motion.div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <motion.div custom={3} variants={fadeUp}>
-                  <label className="text-sm font-medium text-slate-300 ml-1 mb-1 block">Mật khẩu</label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                      <Lock size={18} className="text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
-                    </div>
-                    <input
-                      type="password"
-                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all text-white placeholder:text-slate-600"
-                      placeholder="••••••"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                    />
-                  </div>
-                </motion.div>
-
-                <motion.div custom={4} variants={fadeUp}>
-                  <label className="text-sm font-medium text-slate-300 ml-1 mb-1 block">Xác nhận</label>
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                      <Lock size={18} className="text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
-                    </div>
-                    <input
-                      type="password"
-                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all text-white placeholder:text-slate-600"
-                      placeholder="••••••"
-                      value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      required
-                      minLength={6}
-                    />
-                  </div>
-                </motion.div>
-              </div>
-
-              <motion.div custom={5} variants={fadeUp} className="flex items-start gap-3 mt-4 group">
-                <input 
-                  type="checkbox" 
-                  id="terms" 
-                  checked={agreeTerms}
-                  onChange={e => setAgreeTerms(e.target.checked)}
-                  className="mt-1 w-4 h-4 rounded border-white/20 bg-white/5 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
-                />
-                <label htmlFor="terms" className="text-sm text-slate-400 cursor-pointer group-hover:text-slate-200 transition-colors">
-                  {t('auth.agree_terms')} <a href="#" className="text-cyan-400 hover:text-cyan-300 font-medium">{t('auth.terms')}</a> {t('auth.and')} <a href="#" className="text-cyan-400 hover:text-cyan-300 font-medium">{t('auth.privacy')}</a>
-                </label>
-              </motion.div>
-
-              <motion.button 
-                custom={6} variants={fadeUp}
-                type="submit" 
-                disabled={loading}
-                whileHover={{ scale: 1.01, y: -1 }}
-                whileTap={{ scale: 0.99 }}
-                className="w-full flex items-center justify-center gap-2 py-4 mt-2 bg-white text-black hover:bg-slate-200 rounded-xl font-semibold shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all disabled:opacity-70 disabled:cursor-not-allowed text-[15px]"
-              >
-                {loading ? <Loader2 size={20} className="animate-spin" /> : (
-                  <>{t('auth.register_btn')} <ArrowRight size={18} /></>
-                )}
-              </motion.button>
-            </form>
-
-            <motion.div custom={7} variants={fadeUp} className="mt-8 pt-6 border-t border-white/10 text-center">
-              <p className="text-slate-400 text-sm">
-                {t('auth.already_have_account')} <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">{t('auth.login_now')}</Link>
-              </p>
-            </motion.div>
-          </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
-      {/* Right Side (Visual Left due to flex-row-reverse) - Image/Illustration (Hidden on Mobile) */}
-      <div className="hidden lg:flex w-1/2 relative bg-[#0a0a0a] overflow-hidden items-center justify-center p-12">
-        <div className="absolute inset-0">
-          <img 
-            src="/assets/auth_bg.jpg" 
-            alt="NexusLearn Background" 
-            className="w-full h-full object-cover opacity-60 mix-blend-luminosity hover:mix-blend-normal transition-all duration-1000"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent"></div>
-          {/* Gradient pointing right since it's on the left side visually */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#050505]"></div>
+      {/* Left Side (Visual Right) - Form */}
+      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-24">
+        {/* Mobile Header */}
+        <div className="md:hidden flex justify-center mb-10">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-8 h-8 bg-transparent rounded-md overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
+              <img src="/logo.jpg" alt="NexusLearn" className="w-full h-full object-cover" />
+            </div>
+            <span className="font-heading font-semibold text-xl tracking-tight text-[var(--text-main)]">NexusLearn</span>
+          </Link>
         </div>
 
-        {/* Floating animated elements */}
-        <div className="relative z-10 w-full max-w-lg">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.8 }}
-            className="bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden group"
-          >
-            <div className="absolute top-0 left-0 w-32 h-32 bg-cyan-500/20 blur-[50px] group-hover:bg-cyan-500/40 transition-colors duration-700"></div>
-            
-            <div className="w-12 h-12 bg-cyan-500/20 text-cyan-400 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20">
-              <BrainCircuit size={24} />
-            </div>
-
-            <div className="min-h-[100px] relative">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeFeature}
-                  initial={{ opacity: 0, x: -20, filter: 'blur(4px)' }}
-                  animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                  exit={{ opacity: 0, x: 20, filter: 'blur(4px)' }}
-                  transition={{ duration: 0.4 }}
-                  className="absolute inset-0"
-                >
-                  <h3 className="text-xl font-bold text-white mb-2">{features[activeFeature].title}</h3>
-                  <p className="leading-relaxed text-slate-300">
-                    {features[activeFeature].desc}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
-            </div>
+        <motion.div initial="hidden" animate="visible" className="w-full max-w-md mx-auto">
+          <motion.div custom={0} variants={fadeUp} className="mb-8">
+            <h2 className="text-3xl font-heading font-semibold tracking-tight text-[var(--text-main)]">
+              {t('auth.register_title')}
+            </h2>
+            <p className="mt-2 text-[var(--text-muted)] text-sm">
+              {t('auth.register_subtitle')}
+            </p>
           </motion.div>
-        </div>
+
+          {error && (
+            <motion.div custom={1} variants={fadeUp} className="mb-6 bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded p-3">
+              {error}
+            </motion.div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <motion.div custom={2} variants={fadeUp}>
+              <label className="block text-sm font-medium text-[var(--text-main)] mb-1">{t('auth.name_label')}</label>
+              <input
+                type="text"
+                required
+                className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+                placeholder={t('auth.name_placeholder')}
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            </motion.div>
+
+            <motion.div custom={3} variants={fadeUp}>
+              <label className="block text-sm font-medium text-[var(--text-main)] mb-1">{t('auth.email_label')}</label>
+              <input
+                type="email"
+                required
+                className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+                placeholder={t('auth.email_placeholder')}
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
+            </motion.div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <motion.div custom={4} variants={fadeUp}>
+                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">{t('auth.password_label')}</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+                  placeholder="••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </motion.div>
+
+              <motion.div custom={5} variants={fadeUp}>
+                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">{t('auth.confirm_label')}</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+                  placeholder="••••••"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                />
+              </motion.div>
+            </div>
+
+            <motion.div custom={6} variants={fadeUp} className="flex items-start mt-2">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  required
+                  checked={agreeTerms}
+                  onChange={e => setAgreeTerms(e.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:ring-[var(--text-main)] cursor-pointer transition-colors"
+                />
+              </div>
+              <div className="ml-2 text-sm">
+                <label htmlFor="terms" className="text-[var(--text-muted)] cursor-pointer">
+                  {t('auth.agree_terms')} <span className="font-medium text-[var(--text-main)] hover:underline">{t('auth.terms')}</span> {t('auth.and')} <span className="font-medium text-[var(--text-main)] hover:underline">{t('auth.privacy')}</span>
+                </label>
+              </div>
+            </motion.div>
+
+            <motion.div custom={7} variants={fadeUp} className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-transparent rounded-lg text-sm font-medium text-[var(--bg-main)] bg-[var(--text-main)] hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : (
+                  <>{t('auth.register_btn')} <ArrowRight size={16} /></>
+                )}
+              </button>
+            </motion.div>
+          </form>
+
+          <motion.div custom={8} variants={fadeUp} className="mt-8 text-center text-sm">
+            <span className="text-[var(--text-muted)]">{t('auth.already_have_account')} </span>
+            <Link to="/login" className="font-medium text-[var(--text-main)] hover:underline">
+              {t('auth.login_now')}
+            </Link>
+          </motion.div>
+        </motion.div>
       </div>
     </div>
   )

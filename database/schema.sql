@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
   role ENUM('user', 'admin') DEFAULT 'user',
-  token_quota INT DEFAULT 10000,
+  token_quota INT DEFAULT 15000,
   tokens_used INT DEFAULT 0,
   last_quota_reset TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -90,6 +90,22 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 -- Thêm cấu hình mặc định
 INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
-('default_token_quota', '10000', 'Hạn mức token mặc định cho user mới đăng ký'),
-('quota_reset_period', '24', 'Thời gian tự động hồi hạn mức (giờ). Đặt 0 để tắt.'),
+('default_token_quota', '15000', 'Hạn mức token mặc định cho user mới đăng ký'),
+('quota_reset_period', '24', 'Thời gian tự động hồi hạn mức (giờ). 24 = làm mới lúc 0h mỗi ngày. Đặt 0 để tắt.'),
 ('openai_api_key', '', 'Khóa API của OpenAI (Bỏ trống sẽ dùng mặc định của hệ thống)');
+
+-- Thời điểm hoàn thành chặng (dùng cho thống kê)
+ALTER TABLE user_level_progress ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- Nhật ký hoạt động học tập (heatmap, streak, độ chính xác quiz)
+CREATE TABLE IF NOT EXISTS user_activity (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  document_id INT NULL,
+  activity_type VARCHAR(30) NOT NULL,
+  score INT NULL,
+  total INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_activity_user_date (user_id, created_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

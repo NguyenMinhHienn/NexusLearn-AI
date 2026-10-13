@@ -6,23 +6,25 @@
 
 @layer base {
   :root {
-    --bg-main: #f8fafc;
-    --bg-card: #ffffff;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
+    --bg-main: #FAFAFA;       /* Warm paper white */
+    --bg-surface: #FFFFFF;    /* Pure white for panels */
+    --text-main: #171717;     /* Near black */
+    --text-muted: #737373;    /* Neutral gray */
+    --border-color: #E5E5E5;  /* Subtle border */
+    --accent: #E57B3E;        /* Muted amber */
   }
   
   .dark {
-    --bg-main: #050505; /* Deep Vercel Black */
-    --bg-card: #111111; /* Very dark grey for cards */
-    --text-main: #ededed;
-    --text-muted: #a1a1aa;
-    --border-color: #27272a; /* subtle border */
+    --bg-main: #111110;       /* Warm graphite */
+    --bg-surface: #181817;    /* Slightly lighter graphite */
+    --text-main: #EDEDEC;     /* Off-white */
+    --text-muted: #A1A19A;    /* Warm muted text */
+    --border-color: #2A2A28;  /* Subtle dark border */
+    --accent: #E57B3E;
   }
 
   body {
-    @apply bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-300;
+    @apply bg-[var(--bg-main)] text-[var(--text-main)] transition-colors duration-200 antialiased selection:bg-[var(--accent)] selection:text-white;
   }
   
   h1 { @apply font-heading text-[32px] sm:text-[40px] font-bold tracking-tight; }
@@ -31,22 +33,13 @@
 }
 
 @layer components {
-  .app-background {
-    @apply fixed inset-0 z-[-1] bg-[var(--bg-main)] transition-colors duration-300;
-    background-image: radial-gradient(circle at top center, rgba(120, 119, 198, 0.1) 0%, transparent 40%),
-                      radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.05) 0%, transparent 40%);
-  }
-  
-  .glass-card {
-    @apply bg-white/70 dark:bg-[#111111]/80 backdrop-blur-xl border border-slate-200/50 dark:border-white/10 rounded-[20px] shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.03)] transition-all duration-300;
-  }
-  
-  .glass-card:hover {
-    @apply border-slate-300/50 dark:border-white/20 dark:shadow-[0_0_30px_rgba(255,255,255,0.05)];
+  /* Minimal UI Card without heavy shadows */
+  .minimal-card {
+    @apply bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg transition-colors duration-200;
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-500 dark:from-white dark:to-slate-400;
+    @apply text-[var(--text-main)];
   }
 }
 
@@ -60,5 +53,10 @@
   }
   .backface-hidden {
     backface-visibility: hidden;
+  }
+  .bg-grid-pattern {
+    background-size: 32px 32px;
+    background-image: linear-gradient(to right, var(--border-color) 1px, transparent 1px),
+                      linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
   }
 }

@@ -1,8 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import axios from 'axios'
-const DEV_MODE = false
 
-interface User {
+export interface User {
   id: number
   email: string
   name: string
@@ -10,6 +9,14 @@ interface User {
   role: 'user' | 'admin'
   token_quota: number
   tokens_used: number
+  next_quota_reset?: string | null
+  quota_reset_period?: number
+}
+
+export interface UsageUpdate {
+  tokens_used: number
+  token_quota: number
+  next_quota_reset?: string | null
 }
 
 interface AuthContextType {
@@ -19,6 +26,8 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
+  /** Apply usage numbers returned by AI endpoints so the token bar updates instantly. */
+  applyUsage: (usage?: UsageUpdate | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -68,14 +77,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
+    if (!localStorage.getItem('token')) return
     try {
       const res = await axios.get('/api/auth/me')
       setUser(res.data.user)
     } catch (e) {
       console.error(e)
     }
-  }
+  }, [])
+
+  const applyUsage = useCallback((usage?: UsageUpdate | null) => {
+    if (!usage) return
+    setUser(prev => (prev ? { ...prev, ...usage } : prev))
+  }, [])
 
   const logout = () => {
     localStorage.removeItem('token')
@@ -85,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, applyUsage }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,6 +1,6 @@
 import express, { Response } from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
-import { geminiGlobalChat } from '../services/geminiAiService';
+import { geminiGlobalChat, resolveAiLang } from '../services/geminiAiService';
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.post('/global', async (req, res) => {
       return res.status(400).json({ message: 'Message is required' });
     }
 
-    const aiResponse = await geminiGlobalChat(message, history || []);
+    const aiResponse = await geminiGlobalChat(message, history || [], resolveAiLang(req.headers['accept-language']));
     
     return res.json({
       role: 'model',

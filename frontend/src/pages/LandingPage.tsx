@@ -1,310 +1,226 @@
 import { Link } from 'react-router-dom'
-import { Zap, ArrowRight, Sparkles, Network, BookOpenCheck, LineChart } from 'lucide-react'
+import { ArrowRight, Sparkles, Network, BookOpenCheck, LineChart } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useRef, useEffect } from 'react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import ParticleBackground from '../components/ParticleBackground'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useTranslation } from 'react-i18next'
 
-gsap.registerPlugin(ScrollTrigger)
-
 export default function LandingPage() {
   const { t } = useTranslation()
-  const heroTitleRef = useRef<HTMLHeadingElement>(null)
-  const heroSubRef = useRef<HTMLParagraphElement>(null)
-  const bentoRef = useRef<HTMLDivElement>(null)
-  const stepsRef = useRef<HTMLDivElement>(null)
-  const ctaRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      // Hero title word-by-word reveal
-      if (heroTitleRef.current) {
-        const words = heroTitleRef.current.querySelectorAll('.word')
-        gsap.fromTo(words,
-          { opacity: 0, y: 40, rotateX: -30 },
-          {
-            opacity: 1, y: 0, rotateX: 0,
-            stagger: 0.08,
-            duration: 0.8,
-            ease: 'power3.out',
-            delay: 0.3,
-          }
-        )
-      }
-
-      // Hero subtitle
-      if (heroSubRef.current) {
-        gsap.fromTo(heroSubRef.current,
-          { opacity: 0, y: 30 },
-          { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out', delay: 0.9 }
-        )
-      }
-
-      // Bento Grid cards stagger on scroll
-      if (bentoRef.current) {
-        const cards = bentoRef.current.querySelectorAll('.bento-card')
-        gsap.fromTo(cards,
-          { opacity: 0, y: 60, scale: 0.95 },
-          {
-            opacity: 1, y: 0, scale: 1,
-            stagger: 0.15,
-            duration: 0.7,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: bentoRef.current,
-              start: 'top 80%',
-              toggleActions: 'play none none none',
-            },
-          }
-        )
-      }
-
-      // Steps section
-      if (stepsRef.current) {
-        const steps = stepsRef.current.querySelectorAll('.step-item')
-        gsap.fromTo(steps,
-          { opacity: 0, y: 50 },
-          {
-            opacity: 1, y: 0,
-            stagger: 0.2,
-            duration: 0.6,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: stepsRef.current,
-              start: 'top 75%',
-              toggleActions: 'play none none none',
-            },
-          }
-        )
-      }
-
-      // CTA section
-      if (ctaRef.current) {
-        gsap.fromTo(ctaRef.current,
-          { opacity: 0, scale: 0.9, y: 40 },
-          {
-            opacity: 1, scale: 1, y: 0,
-            duration: 0.8,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: ctaRef.current,
-              start: 'top 80%',
-              toggleActions: 'play none none none',
-            },
-          }
-        )
+  const fadeUpVariants: any = {
+    hidden: { opacity: 0, y: 30 },
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: (i || 0) * 0.1,
+        duration: 0.8,
+        ease: [0.16, 1, 0.3, 1]
       }
     })
-
-    return () => ctx.revert()
-  }, [t]) // Re-run GSAP when language changes so it targets new DOM
-
-  const splitWords = (text: string) => {
-    return text.split(' ').map((word, i) => (
-      <span key={i} className="word inline-block mr-[0.3em]" style={{ perspective: '600px' }}>
-        {word}
-      </span>
-    ))
   }
 
-  // Helper to split hero title since it has two colors
-  const titleWords = t('landing.hero_title').split(' ')
-  const halfLength = Math.ceil(titleWords.length / 2)
-  const firstHalf = titleWords.slice(0, halfLength).join(' ')
-  const secondHalf = titleWords.slice(halfLength).join(' ')
+  const staggerContainer: any = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15
+      }
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 font-sans overflow-x-hidden">
-      {/* Particle Background */}
-      <ParticleBackground />
-
-      {/* Subtle gradient overlays on top of particles */}
-      <div className="fixed inset-0 z-[1] pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full mix-blend-screen"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-600/10 blur-[120px] rounded-full mix-blend-screen"></div>
-      </div>
-
-      {/* Floating Header */}
-      <header className="fixed top-0 inset-x-0 z-50 flex justify-center p-4 sm:p-6 pointer-events-none">
-        <motion.div
-          initial={{ y: -20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full max-w-5xl bg-[#111111]/80 backdrop-blur-md border border-white/10 rounded-2xl px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-2xl pointer-events-auto"
-        >
+    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] font-sans selection:bg-[var(--text-main)] selection:text-[var(--bg-main)]">
+      {/* Header */}
+      <header className="fixed top-0 inset-x-0 z-50 bg-[var(--bg-main)]/80 backdrop-blur-md border-b border-[var(--border-color)]">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/20">
-              <img src="/logo.jpg" alt="NexusLearn Logo" className="w-full h-full object-cover" />
+            <div className="w-8 h-8 bg-transparent rounded-md overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
+              <img src="/logo.jpg" alt="NexusLearn" className="w-full h-full object-cover" />
             </div>
-            <span className="font-heading font-bold text-lg tracking-tight">NexusLearn</span>
+            <span className="font-heading font-semibold text-lg tracking-tight">NexusLearn</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <LanguageSwitcher />
-            <Link to="/login" className="text-sm font-medium text-slate-300 hover:text-white transition-colors hidden sm:block">{t('landing.login')}</Link>
-            <Link to="/register" className="text-sm font-semibold bg-white text-black px-4 py-2 rounded-xl hover:bg-slate-200 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:shadow-[0_0_20px_rgba(255,255,255,0.4)]">
+            <Link to="/login" className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors hidden sm:block">
+              {t('landing.login')}
+            </Link>
+            <Link to="/register" className="text-sm font-medium bg-[var(--text-main)] text-[var(--bg-main)] px-4 py-2 rounded hover:opacity-90 transition-opacity">
               {t('landing.register')}
             </Link>
           </div>
-        </motion.div>
+        </div>
       </header>
 
-      <main className="relative z-10">
+      <main className="pt-32 pb-24 px-6 max-w-7xl mx-auto">
         {/* Hero Section */}
-        <section className="pt-40 pb-20 sm:pt-48 sm:pb-32 px-4 flex flex-col items-center justify-center text-center">
+        <section className="flex flex-col items-center text-center max-w-4xl mx-auto mb-32">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300 text-xs sm:text-sm font-medium mb-8 backdrop-blur-md"
+            custom={0} initial="hidden" animate="visible" variants={fadeUpVariants}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-muted)] text-xs font-semibold uppercase tracking-wider mb-8"
           >
-            <Sparkles size={14} className="text-indigo-400" /> <p>NexusLearn - AI</p>
+            <Sparkles size={12} className="text-[var(--text-main)]" /> <p>NexusLearn - AI</p>
           </motion.div>
 
-          <h1
-            ref={heroTitleRef}
-            className="text-5xl sm:text-7xl lg:text-8xl font-extrabold tracking-tighter mb-6 max-w-4xl"
+          <motion.h1
+            custom={1} initial="hidden" animate="visible" variants={fadeUpVariants}
+            className="text-5xl sm:text-6xl md:text-7xl font-heading font-bold tracking-tight mb-8 leading-[1.1]"
           >
-            {splitWords(firstHalf || "Chinh phục tri thức")}
-            <br className="hidden sm:block" />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 animate-gradient bg-[length:200%_auto]">
-              {splitWords(secondHalf || "Cùng AI")}
-            </span>
-          </h1>
+            {t('landing.hero_title')}
+          </motion.h1>
 
-          <p
-            ref={heroSubRef}
-            className="text-lg sm:text-xl text-slate-400 max-w-2xl mb-10 leading-relaxed font-medium opacity-0"
+          <motion.p
+            custom={2} initial="hidden" animate="visible" variants={fadeUpVariants}
+            className="text-lg sm:text-xl text-[var(--text-muted)] mb-10 max-w-2xl leading-relaxed"
           >
             {t('landing.hero_subtitle')}
-          </p>
+          </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 1.1 }}
+            custom={3} initial="hidden" animate="visible" variants={fadeUpVariants}
             className="flex flex-col sm:flex-row items-center gap-4"
           >
-            <Link to="/register" className="w-full sm:w-auto px-8 py-4 bg-white text-black font-semibold rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-100 transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105">
+            <Link to="/register" className="w-full sm:w-auto px-8 py-4 bg-[var(--text-main)] text-[var(--bg-main)] font-semibold rounded flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
               {t('landing.start_journey')} <ArrowRight size={18} />
             </Link>
-            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-[#111111] border border-white/10 text-white font-semibold rounded-2xl flex items-center justify-center hover:bg-white/5 transition-all">
+            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)] font-semibold rounded flex items-center justify-center hover:border-[var(--text-muted)] transition-colors">
               {t('landing.already_have_account')}
             </Link>
           </motion.div>
         </section>
 
-        {/* Bento Grid Features Section */}
-        <section className="py-20 px-4 max-w-7xl mx-auto">
+        {/* Features / Bento */}
+        <motion.section 
+          initial="hidden" 
+          whileInView="visible" 
+          viewport={{ once: true, margin: "-100px" }}
+          variants={staggerContainer}
+          className="mb-32"
+        >
           <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4">
+            <motion.h2 variants={fadeUpVariants} className="text-2xl sm:text-3xl font-semibold tracking-tight mb-4 text-[var(--text-main)]">
               {t('landing.bento_title')}
-            </h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+            </motion.h2>
+            <motion.p variants={fadeUpVariants} className="text-[var(--text-muted)] text-lg max-w-2xl mx-auto">
               {t('landing.bento_subtitle')}
-            </p>
+            </motion.p>
           </div>
 
-          <div ref={bentoRef} className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[250px]">
-            {/* Bento Card 1 - Large */}
-            <div className="bento-card md:col-span-2 md:row-span-2 bg-[#111111] border border-white/5 rounded-3xl p-8 relative overflow-hidden group hover:border-white/10 transition-all duration-500 shadow-2xl hover:shadow-indigo-500/5">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="w-14 h-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mb-6 border border-indigo-500/20 group-hover:scale-110 transition-transform duration-500">
-                <Network size={28} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[250px]">
+            {/* Card 1 */}
+            <motion.div 
+              variants={fadeUpVariants}
+              whileHover={{ scale: 1.02 }} 
+              transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }} 
+              className="md:col-span-2 md:row-span-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded p-8 sm:p-12 flex flex-col hover:border-[var(--text-muted)] transition-colors group cursor-default"
+            >
+              <div className="w-12 h-12 bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)] rounded flex items-center justify-center mb-8">
+                <Network size={24} />
               </div>
-              <h3 className="text-2xl font-bold mb-3">{t('landing.card1_title')}</h3>
-              <p className="text-slate-400 text-lg leading-relaxed max-w-md">
+              <h3 className="text-2xl font-semibold mb-4 text-[var(--text-main)]">{t('landing.card1_title')}</h3>
+              <p className="text-[var(--text-muted)] text-lg leading-relaxed max-w-md">
                 {t('landing.card1_desc')}
               </p>
-              <div className="absolute -bottom-10 -right-10 w-64 h-64 bg-indigo-500/20 blur-[60px] rounded-full group-hover:bg-indigo-500/30 transition-colors duration-500"></div>
-            </div>
+            </motion.div>
 
-            {/* Bento Card 2 */}
-            <div className="bento-card bg-[#111111] border border-white/5 rounded-3xl p-8 relative overflow-hidden group hover:border-white/10 transition-all duration-500 shadow-2xl hover:shadow-pink-500/5">
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="w-12 h-12 bg-pink-500/20 text-pink-400 rounded-2xl flex items-center justify-center mb-5 border border-pink-500/20 group-hover:scale-110 transition-transform duration-500">
-                <BookOpenCheck size={24} />
+            {/* Card 2 */}
+            <motion.div 
+              variants={fadeUpVariants}
+              whileHover={{ scale: 1.02 }} 
+              transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }} 
+              className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded p-8 flex flex-col hover:border-[var(--text-muted)] transition-colors cursor-default"
+            >
+              <div className="w-10 h-10 bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)] rounded flex items-center justify-center mb-6">
+                <BookOpenCheck size={20} />
               </div>
-              <h3 className="text-xl font-bold mb-2">{t('landing.card2_title')}</h3>
-              <p className="text-slate-400">
+              <h3 className="text-xl font-semibold mb-3 text-[var(--text-main)]">{t('landing.card2_title')}</h3>
+              <p className="text-[var(--text-muted)]">
                 {t('landing.card2_desc')}
               </p>
-            </div>
+            </motion.div>
 
-            {/* Bento Card 3 */}
-            <div className="bento-card bg-[#111111] border border-white/5 rounded-3xl p-8 relative overflow-hidden group hover:border-white/10 transition-all duration-500 shadow-2xl hover:shadow-cyan-500/5">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="w-12 h-12 bg-cyan-500/20 text-cyan-400 rounded-2xl flex items-center justify-center mb-5 border border-cyan-500/20 group-hover:scale-110 transition-transform duration-500">
-                <LineChart size={24} />
+            {/* Card 3 */}
+            <motion.div 
+              variants={fadeUpVariants}
+              whileHover={{ scale: 1.02 }} 
+              transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }} 
+              className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded p-8 flex flex-col hover:border-[var(--text-muted)] transition-colors cursor-default"
+            >
+              <div className="w-10 h-10 bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)] rounded flex items-center justify-center mb-6">
+                <LineChart size={20} />
               </div>
-              <h3 className="text-xl font-bold mb-2">{t('landing.card3_title')}</h3>
-              <p className="text-slate-400">
+              <h3 className="text-xl font-semibold mb-3 text-[var(--text-main)]">{t('landing.card3_title')}</h3>
+              <p className="text-[var(--text-muted)]">
                 {t('landing.card3_desc')}
               </p>
-            </div>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
-        {/* How it works */}
-        <section className="py-24 px-4 max-w-5xl mx-auto border-t border-white/5">
+        {/* Steps */}
+        <motion.section 
+          initial="hidden" 
+          whileInView="visible" 
+          viewport={{ once: true, margin: "-100px" }}
+          variants={staggerContainer}
+          className="mb-32 py-16 border-t border-b border-[var(--border-color)]"
+        >
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">{t('landing.steps_title')}</h2>
+            <motion.h2 variants={fadeUpVariants} className="text-2xl font-semibold tracking-tight text-[var(--text-main)]">{t('landing.steps_title')}</motion.h2>
           </div>
 
-          <div ref={stepsRef} className="flex flex-col md:flex-row items-start justify-between gap-8 relative">
-            {/* Connecting line */}
-            <div className="hidden md:block absolute top-10 left-10 right-10 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-
-            <div className="step-item flex flex-col items-center text-center relative z-10 group w-full md:w-1/3">
-              <div className="w-20 h-20 bg-[#111111] border border-white/10 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400 group-hover:text-white group-hover:border-indigo-500/50 group-hover:shadow-[0_0_30px_rgba(99,102,241,0.2)] transition-all duration-500 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <motion.div variants={fadeUpVariants} className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-[var(--bg-main)] border border-[var(--text-main)] text-[var(--text-main)] rounded flex items-center justify-center text-lg font-bold mb-6">
                 1
               </div>
-              <h3 className="text-xl font-bold mb-2">{t('landing.step1_title')}</h3>
-              <p className="text-slate-400 text-sm">{t('landing.step1_desc')}</p>
-            </div>
+              <h3 className="text-lg font-semibold mb-3 text-[var(--text-main)]">{t('landing.step1_title')}</h3>
+              <p className="text-[var(--text-muted)] text-sm">{t('landing.step1_desc')}</p>
+            </motion.div>
 
-            <div className="step-item flex flex-col items-center text-center relative z-10 group w-full md:w-1/3">
-              <div className="w-20 h-20 bg-[#111111] border border-white/10 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400 group-hover:text-white group-hover:border-purple-500/50 group-hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] transition-all duration-500 mb-6">
+            <motion.div variants={fadeUpVariants} className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-[var(--bg-main)] border border-[var(--text-main)] text-[var(--text-main)] rounded flex items-center justify-center text-lg font-bold mb-6">
                 2
               </div>
-              <h3 className="text-xl font-bold mb-2">{t('landing.step2_title')}</h3>
-              <p className="text-slate-400 text-sm">{t('landing.step2_desc')}</p>
-            </div>
+              <h3 className="text-lg font-semibold mb-3 text-[var(--text-main)]">{t('landing.step2_title')}</h3>
+              <p className="text-[var(--text-muted)] text-sm">{t('landing.step2_desc')}</p>
+            </motion.div>
 
-            <div className="step-item flex flex-col items-center text-center relative z-10 group w-full md:w-1/3">
-              <div className="w-20 h-20 bg-[#111111] border border-white/10 rounded-2xl flex items-center justify-center text-2xl font-bold text-slate-400 group-hover:text-white group-hover:border-cyan-500/50 group-hover:shadow-[0_0_30px_rgba(6,182,212,0.2)] transition-all duration-500 mb-6">
+            <motion.div variants={fadeUpVariants} className="flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-[var(--bg-main)] border border-[var(--text-main)] text-[var(--text-main)] rounded flex items-center justify-center text-lg font-bold mb-6">
                 3
               </div>
-              <h3 className="text-xl font-bold mb-2">{t('landing.step3_title')}</h3>
-              <p className="text-slate-400 text-sm">{t('landing.step3_desc')}</p>
-            </div>
+              <h3 className="text-lg font-semibold mb-3 text-[var(--text-main)]">{t('landing.step3_title')}</h3>
+              <p className="text-[var(--text-muted)] text-sm">{t('landing.step3_desc')}</p>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
-        {/* CTA Section */}
-        <section className="py-24 px-4">
-          <div ref={ctaRef} className="max-w-4xl mx-auto bg-gradient-to-b from-[#18181b] to-[#0a0a0a] border border-white/10 rounded-[3rem] p-12 text-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-mesh opacity-20 mix-blend-overlay"></div>
-            <div className="relative z-10">
-              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">{t('landing.cta_title')}</h2>
-              <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
-                {t('landing.cta_desc')}
-              </p>
-              <Link to="/register" className="inline-flex items-center gap-2 px-8 py-4 bg-white text-black font-semibold rounded-2xl hover:scale-105 hover:bg-slate-100 transition-all shadow-[0_0_30px_rgba(255,255,255,0.2)] text-lg">
-                <Zap size={20} className="text-amber-500 fill-amber-500" /> {t('landing.cta_btn')}
-              </Link>
-            </div>
-          </div>
-        </section>
+        {/* CTA */}
+        <motion.section 
+          initial="hidden" 
+          whileInView="visible" 
+          viewport={{ once: true, margin: "-100px" }}
+          variants={fadeUpVariants}
+          className="text-center py-16"
+        >
+          <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6 text-[var(--text-main)]">{t('landing.cta_title')}</h2>
+          <p className="text-lg text-[var(--text-muted)] mb-10 max-w-2xl mx-auto">
+            {t('landing.cta_desc')}
+          </p>
+          <Link to="/register" className="inline-flex items-center gap-2 px-8 py-4 bg-[var(--text-main)] text-[var(--bg-main)] font-semibold rounded hover:opacity-90 transition-opacity">
+            {t('landing.cta_btn')} <ArrowRight size={18} />
+          </Link>
+        </motion.section>
 
-        {/* Footer */}
-        <footer className="py-8 border-t border-white/5 text-center text-slate-500 text-sm">
-          <p>(c) 2026 NexusLearn AI. All rights reserved.</p>
-          <p>by Nguyen Minh Hien</p>
-        </footer>
       </main>
+      
+      {/* Footer */}
+      <footer className="py-8 border-t border-[var(--border-color)] text-center text-[var(--text-muted)] text-xs uppercase tracking-wider font-medium">
+        <p className="mb-1">© 2026 NexusLearn AI.</p>
+        <p>by Nguyen Minh Hien</p>
+      </footer>
     </div>
   )
 }

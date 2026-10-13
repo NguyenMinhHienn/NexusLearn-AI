@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
 import { Globe, ChevronDown } from 'lucide-react'
+import { currentLanguage } from '../i18n'
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation()
@@ -13,7 +14,8 @@ export default function LanguageSwitcher() {
     { code: 'en', label: 'English', flag: '🇺🇸' },
   ]
 
-  const currentLang = languages.find((lang) => lang.code === i18n.language) || languages[0]
+  const activeCode = currentLanguage()
+  const currentLang = languages.find((lang) => lang.code === activeCode) || languages[0]
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -28,6 +30,7 @@ export default function LanguageSwitcher() {
   return (
     <div className="relative z-50" ref={dropdownRef}>
       <button
+        id="language-switcher-btn"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-sm font-medium text-slate-200"
       >
@@ -49,6 +52,7 @@ export default function LanguageSwitcher() {
               {languages.map((lang) => (
                 <button
                   key={lang.code}
+                  id={`language-option-${lang.code}`}
                   onClick={() => {
                     i18n.changeLanguage(lang.code)
                     setIsOpen(false)

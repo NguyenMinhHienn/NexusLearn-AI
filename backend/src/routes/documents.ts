@@ -1,17 +1,77 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import pool from '../config/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import multer from 'multer';
 // @ts-ignore
 import pdfParse from 'pdf-parse';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { geminiAnalyzeDocument, geminiChatWithDocument, geminiGenerateFlashcards } from '../services/geminiAiService';
+import {
+  geminiAnalyzeDocument,
+  geminiChatWithDocument,
+  geminiGenerateFlashcards,
+  geminiReviewChat,
+  resolveAiLang,
+  MAX_ANALYZE_CHARS,
+  MAX_HISTORY_TURNS,
+} from '../services/geminiAiService';
 import { YoutubeTranscript } from 'youtube-transcript';
-import { syncUserQuota } from '../services/quotaService';
+import {
+  syncUserQuota,
+  addTokenUsage,
+  checkQuota,
+  estimateTextTokens,
+  OUTPUT_RESERVE,
+  PROMPT_OVERHEAD,
+  QuotaCheck,
+} from '../services/quotaService';
+import { logActivity } from '../services/schemaService';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
-router.post('/upload', authenticateToken, upload.single('file'), async (req: AuthRequest, res: Response) => {
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
+
+const TEXT_EXTENSIONS = ['.txt', '.md', '.markdown', '.csv', '.json'];
+const QUOTA_MESSAGE = 'Bạn không đủ token AI cho thao tác này. Hạn mức sẽ tự làm mới vào 0h, hoặc nâng cấp gói để dùng tiếp.';
+
+/** Blocks the action and tells the client how much it needed vs. what is left. */
+const quotaExceeded = (res: Response, check: QuotaCheck, action: 'analyze' | 'chat' | 'flashcards') =>
+  res.status(403).json({
+    message: QUOTA_MESSAGE,
+    quota_exceeded: true,
+    code: 'QUOTA_EXCEEDED',
+    action,
+    estimated: check.estimated,
+    remaining: check.remaining,
+  });
+
+/** Estimated cost of a chat turn: context + recent history + question + answer. */
+const estimateChatCost = (context: string, history: { text?: string }[] = [], message = '') =>
+  PROMPT_OVERHEAD +
+  estimateTextTokens(context) +
+  estimateTextTokens((history || []).slice(-MAX_HISTORY_TURNS).map(h => h?.text || '').join(' ')) +
+  estimateTextTokens(message) +
+  OUTPUT_RESERVE.chat;
+
+/** Returns latest usage so the client can update the token bar instantly. */
+async function usagePayload(userId: number) {
+  const user = await syncUserQuota(userId);
+  return user
+    ? { tokens_used: user.tokens_used, token_quota: user.token_quota, next_quota_reset: user.next_quota_reset }
+    : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Upload
+// ---------------------------------------------------------------------------
+router.post('/upload', authenticateToken, (req: AuthRequest, res: Response, next) => {
+  upload.single('file')(req, res, (err: any) => {
+    if (err?.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: 'File vượt quá 10MB. Vui lòng chọn file nhỏ hơn.', code: 'FILE_TOO_LARGE' });
+    }
+    if (err) return res.status(400).json({ message: 'Không thể đọc file tải lên.' });
+    next();
+  });
+}, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -19,18 +79,15 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req: Aut
     const user = await syncUserQuota(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const tokenQuota = user.token_quota || 0;
-    const tokensUsed = user.tokens_used || 0;
-    const ESTIMATED_COST = 1500; 
-
-    if (tokensUsed + ESTIMATED_COST > tokenQuota) {
-      return res.status(403).json({ 
-        message: 'Bạn đã hết hạn mức AI. Vui lòng liên hệ Admin để nâng cấp hoặc chờ đến chu kỳ tiếp theo.',
-        quota_exceeded: true 
-      });
-    }
+    // Cheap early exit when the user clearly cannot afford even a tiny document
+    const minCheck = checkQuota(user, PROMPT_OVERHEAD + OUTPUT_RESERVE.analyze);
+    if (!minCheck.ok) return quotaExceeded(res, minCheck, 'analyze');
 
     const { title, textContent, youtubeUrl } = req.body;
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ message: 'Vui lòng nhập tên tài liệu.' });
+    }
+
     let extractedText = textContent || '';
     let originalFilename = 'Pasted Text';
 
@@ -40,232 +97,269 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req: Aut
         const transcript = await YoutubeTranscript.fetchTranscript(youtubeUrl);
         extractedText = transcript.map(t => t.text).join(' ');
       } catch (err) {
-        return res.status(400).json({ message: 'Không thể lấy phụ đề từ video này. Hãy đảm bảo video có phụ đề (CC).' });
+        return res.status(400).json({ message: 'Không thể lấy phụ đề từ video này. Hãy đảm bảo video có phụ đề (CC).', code: 'YOUTUBE_NO_TRANSCRIPT' });
       }
     } else if (req.file) {
       originalFilename = req.file.originalname;
-      if (req.file.mimetype === 'application/pdf') {
+      const lowerName = originalFilename.toLowerCase();
+
+      if (req.file.mimetype === 'application/pdf' || lowerName.endsWith('.pdf')) {
         try {
           const data = await pdfParse(req.file.buffer);
           extractedText = data.text;
         } catch (pdfError) {
           console.error('Lỗi khi parse PDF:', pdfError);
-          return res.status(400).json({ message: 'Không thể đọc file PDF này. File có thể bị hỏng, mã hóa, hoặc không đúng định dạng chuẩn.' });
+          return res.status(400).json({ message: 'Không thể đọc file PDF này. File có thể bị hỏng, mã hóa, hoặc không đúng định dạng chuẩn.', code: 'PDF_INVALID' });
         }
-      } else {
-        // Fallback for text files
+      } else if (req.file.mimetype.startsWith('text/') || TEXT_EXTENSIONS.some(ext => lowerName.endsWith(ext))) {
         extractedText = req.file.buffer.toString('utf-8');
+      } else {
+        return res.status(400).json({ message: 'Định dạng chưa được hỗ trợ. Vui lòng dùng PDF, TXT hoặc MD.', code: 'UNSUPPORTED_FORMAT' });
       }
     }
 
     if (!extractedText || !extractedText.trim()) {
-      return res.status(400).json({ message: 'Không tìm thấy chữ nào trong tài liệu. Nếu đây là file PDF dạng ảnh quét (scanned image), hệ thống hiện chưa hỗ trợ nhận diện (OCR) cho định dạng này.' });
+      return res.status(400).json({ message: 'Không tìm thấy chữ nào trong tài liệu. Nếu đây là file PDF dạng ảnh quét (scanned image), hệ thống hiện chưa hỗ trợ nhận diện (OCR) cho định dạng này.', code: 'EMPTY_TEXT' });
     }
+
+    // Real cost check now that we know the document size (only the first MAX_ANALYZE_CHARS are sent)
+    const sentChars = Math.min(extractedText.length, MAX_ANALYZE_CHARS);
+    const analyzeCheck = checkQuota(
+      user,
+      PROMPT_OVERHEAD + estimateTextTokens(extractedText.slice(0, sentChars)) + OUTPUT_RESERVE.analyze
+    );
+    if (!analyzeCheck.ok) return quotaExceeded(res, analyzeCheck, 'analyze');
+
     const [docResult] = await pool.query<ResultSetHeader>(
       'INSERT INTO documents (user_id, title, original_filename, status) VALUES (?, ?, ?, ?)',
-      [userId, title, originalFilename, 'processing']
+      [userId, String(title).trim(), originalFilename, 'processing']
     );
     const documentId = docResult.insertId;
-    await pool.query('UPDATE users SET tokens_used = tokens_used + ? WHERE id = ?', [ESTIMATED_COST, userId]);
-    geminiAnalyzeDocument(documentId, extractedText).catch(console.error);
+    logActivity(userId, 'upload', documentId);
+
+    // Background analysis; real token usage is deducted inside when it finishes
+    const lang = resolveAiLang(req.headers['accept-language']);
+    geminiAnalyzeDocument(documentId, extractedText, userId, lang).catch(console.error);
 
     res.status(202).json({
       message: 'Tài liệu đang được phân tích',
-      documentId
+      documentId,
+      estimated: analyzeCheck.estimated,
+      truncated: extractedText.length > MAX_ANALYZE_CHARS,
     });
-
   } catch (error) {
     console.error('Lỗi upload:', error);
     res.status(500).json({ message: 'Lỗi server khi upload' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// List documents
+// ---------------------------------------------------------------------------
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     const [documents] = await pool.query<RowDataPacket[]>(
       `SELECT d.*, 
         (SELECT COUNT(*) FROM concepts c WHERE c.document_id = d.id) as concepts_count,
-        (SELECT COUNT(*) FROM user_level_progress p WHERE p.document_id = d.id AND p.user_id = d.user_id AND p.is_completed = 1) as completed_levels
-       FROM documents d WHERE user_id = ? ORDER BY created_at DESC`,
+        (SELECT COUNT(*) FROM quiz_questions q WHERE q.document_id = d.id) as quiz_count,
+        (SELECT COUNT(*) FROM user_level_progress p WHERE p.document_id = d.id AND p.user_id = d.user_id AND p.is_completed = 1) as completed_levels,
+        (SELECT MAX(a.created_at) FROM user_activity a WHERE a.document_id = d.id AND a.user_id = d.user_id) as last_activity_at
+       FROM documents d WHERE user_id = ? ORDER BY COALESCE(last_activity_at, d.created_at) DESC, d.created_at DESC`,
       [userId]
     );
     res.json(documents);
   } catch (error) {
+    console.error('List documents error:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Dashboard stats (all real data, no random filler)
+// ---------------------------------------------------------------------------
 router.get('/stats/summary', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
 
-    const [docsResult] = await pool.query<RowDataPacket[]>('SELECT COUNT(id) as total_docs FROM documents WHERE user_id = ?', [userId]);
-    const totalDocs = docsResult[0].total_docs || 0;
-
-    const [conceptsResult] = await pool.query<RowDataPacket[]>(
-      `SELECT COUNT(c.id) as total_concepts FROM concepts c JOIN documents d ON c.document_id = d.id WHERE d.user_id = ?`,
+    const [[docsRow]] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(id) as total_docs, SUM(status = 'analyzed') as analyzed_docs FROM documents WHERE user_id = ?`,
       [userId]
     );
-    const totalConcepts = conceptsResult[0].total_concepts || 0;
+    const totalDocs = Number(docsRow.total_docs) || 0;
+    const analyzedDocs = Number(docsRow.analyzed_docs) || 0;
 
-    const [progressResult] = await pool.query<RowDataPacket[]>(
-      `SELECT COUNT(p.id) as completed_levels FROM user_level_progress p JOIN documents d ON p.document_id = d.id WHERE d.user_id = ? AND p.is_completed = 1`,
+    const [[conceptsRow]] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(c.id) as total FROM concepts c JOIN documents d ON c.document_id = d.id WHERE d.user_id = ?`,
       [userId]
     );
-    const completedLevels = progressResult[0].completed_levels || 0;
-    const totalPossibleLevels = totalDocs * 3;
-
-    const understoodPercent = totalPossibleLevels > 0 ? Math.round((completedLevels / totalPossibleLevels) * 100) : 0;
-    const needsReview = totalPossibleLevels > 0 ? totalPossibleLevels - completedLevels : 0;
-
-    // Total Quizzes
-    const [quizzesResult] = await pool.query<RowDataPacket[]>(
-      `SELECT COUNT(q.id) as total_quizzes FROM quiz_questions q JOIN documents d ON q.document_id = d.id WHERE d.user_id = ?`,
-      [userId]
-    );
-    const totalQuizzes = quizzesResult[0].total_quizzes || 0;
-
-    // Radar Data (Skill distribution based on generated concepts)
-    const [radarQuery] = await pool.query<RowDataPacket[]>(
-      `SELECT level, COUNT(c.id) as count FROM concepts c JOIN documents d ON c.document_id = d.id WHERE d.user_id = ? GROUP BY level`,
-      [userId]
-    );
-    
-    // Map levels to Vietnamese labels
-    const levelNameMap: Record<string, string> = {
-      'basic': 'Nền tảng',
-      'intermediate': 'Nâng cao',
-      'advanced': 'Chuyên sâu'
-    };
-    
-    // Default radar data if no concepts exist
-    let radarData = [
-      { subject: 'Nền tảng', A: 0, fullMark: 100 },
-      { subject: 'Nâng cao', A: 0, fullMark: 100 },
-      { subject: 'Chuyên sâu', A: 0, fullMark: 100 },
-      { subject: 'Thực hành', A: 0, fullMark: 100 },
-      { subject: 'Lý thuyết', A: 0, fullMark: 100 },
-    ];
-    
-    if (radarQuery.length > 0) {
-      let maxCount = Math.max(...radarQuery.map((r: any) => r.count));
-      if (maxCount === 0) maxCount = 1; // Prevent division by zero
-      
-      radarData = radarData.map(item => {
-        const found = radarQuery.find((r: any) => levelNameMap[r.level] === item.subject);
-        if (found) {
-          // Calculate percentage for the radar chart (give a small base score)
-          item.A = Math.round((found.count / maxCount) * 80) + 20; 
-        } else {
-          // Fake data for Thuc Hanh and Ly Thuyet to make radar look good
-          item.A = Math.floor(Math.random() * 40) + 40;
-        }
-        return item;
-      });
-    } else {
-      // Dummy data for empty state
-      radarData = [
-        { subject: 'Nền tảng', A: 60, fullMark: 100 },
-        { subject: 'Nâng cao', A: 40, fullMark: 100 },
-        { subject: 'Chuyên sâu', A: 30, fullMark: 100 },
-        { subject: 'Thực hành', A: 50, fullMark: 100 },
-        { subject: 'Lý thuyết', A: 70, fullMark: 100 },
-      ];
-    }
-
-    // Donut Data (Progress by level)
-    const [donutQuery] = await pool.query<RowDataPacket[]>(
-      `SELECT level, COUNT(*) as count FROM user_level_progress p JOIN documents d ON p.document_id = d.id WHERE d.user_id = ? AND p.is_completed = 1 GROUP BY level`,
-      [userId]
-    );
-    
-    let donutData = [
-      { name: 'Nền tảng', value: 0, color: '#3b82f6' },
-      { name: 'Nâng cao', value: 0, color: '#f59e0b' },
-      { name: 'Chuyên sâu', value: 0, color: '#10b981' }
-    ];
-    
-    if (donutQuery.length > 0) {
-      donutData = donutData.map(item => {
-        const found = donutQuery.find((r: any) => levelNameMap[r.level] === item.name);
-        if (found) {
-          item.value = found.count;
-        }
-        return item;
-      });
-    } else {
-      // Dummy data
-      donutData = [
-        { name: 'Nền tảng', value: 4, color: '#3b82f6' },
-        { name: 'Nâng cao', value: 2, color: '#f59e0b' },
-        { name: 'Chuyên sâu', value: 1, color: '#10b981' }
-      ];
-    }
-
-    // Calculate dynamic activity data for the chart based on document creation date
-    const [activityResult] = await pool.query<RowDataPacket[]>(
-      `SELECT DAYOFWEEK(created_at) as dow, COUNT(id) as count 
-       FROM documents 
-       WHERE user_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-       GROUP BY dow`,
+    const [[quizRow]] = await pool.query<RowDataPacket[]>(
+      `SELECT COUNT(q.id) as total FROM quiz_questions q JOIN documents d ON q.document_id = d.id WHERE d.user_id = ?`,
       [userId]
     );
 
-    const dowMap: Record<number, string> = {
-      1: 'CN', 2: 'T2', 3: 'T3', 4: 'T4', 5: 'T5', 6: 'T6', 7: 'T7'
+    const [levelRows] = await pool.query<RowDataPacket[]>(
+      `SELECT p.level, COUNT(*) as count FROM user_level_progress p JOIN documents d ON p.document_id = d.id
+       WHERE d.user_id = ? AND p.is_completed = 1 GROUP BY p.level`,
+      [userId]
+    );
+    const levelCounts: Record<string, number> = { basic: 0, intermediate: 0, advanced: 0 };
+    levelRows.forEach(r => { levelCounts[r.level] = Number(r.count) || 0; });
+    const completedLevels = levelCounts.basic + levelCounts.intermediate + levelCounts.advanced;
+
+    // Daily activity for the last 84 days (12 weeks): explicit activity + uploads from before tracking existed
+    const [dailyRows] = await pool.query<RowDataPacket[]>(
+      `SELECT day, SUM(cnt) as count FROM (
+         SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as day, COUNT(*) as cnt
+           FROM user_activity WHERE user_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 83 DAY)
+           GROUP BY day
+         UNION ALL
+         SELECT DATE_FORMAT(d.created_at, '%Y-%m-%d') as day, COUNT(*) as cnt
+           FROM documents d
+           WHERE d.user_id = ? AND d.created_at >= DATE_SUB(CURDATE(), INTERVAL 83 DAY)
+             AND NOT EXISTS (SELECT 1 FROM user_activity a WHERE a.document_id = d.id AND a.activity_type = 'upload')
+           GROUP BY day
+       ) t GROUP BY day`,
+      [userId, userId]
+    );
+    const [[todayRow]] = await pool.query<RowDataPacket[]>(`SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') as today`);
+    const today: string = todayRow.today;
+
+    const dailyMap: Record<string, number> = {};
+    dailyRows.forEach(r => { dailyMap[r.day] = Number(r.count) || 0; });
+
+    const addDays = (iso: string, delta: number) => {
+      const [y, m, d] = iso.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d + delta));
+      return dt.toISOString().slice(0, 10);
     };
 
-    const activityMap: Record<string, number> = {
-      'T2': 0, 'T3': 0, 'T4': 0, 'T5': 0, 'T6': 0, 'T7': 0, 'CN': 0
-    };
-
-    activityResult.forEach(row => {
-       const dayStr = dowMap[row.dow];
-       if (dayStr) {
-         activityMap[dayStr] = row.count * 25 + Math.floor(Math.random() * 15); // Add a baseline scale to make the chart look nice
-       }
+    const heatmap = Array.from({ length: 84 }, (_, i) => {
+      const date = addDays(today, i - 83);
+      return { date, count: dailyMap[date] || 0 };
     });
+    const activityData = heatmap.slice(-7);
+    const weekActivity = activityData.reduce((sum, d) => sum + d.count, 0);
 
-    // Ensure there is some base data so the chart doesn't look flat if they just started
-    if (activityResult.length === 0) {
-      activityMap['T2'] = 10;
-      activityMap['T5'] = 15;
+    // Streak: consecutive active days ending today (or yesterday if nothing yet today)
+    let streak = 0;
+    let cursor = dailyMap[today] ? today : addDays(today, -1);
+    while (dailyMap[cursor]) {
+      streak++;
+      cursor = addDays(cursor, -1);
     }
 
-    const activityData = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(name => ({
-      name,
-      value: activityMap[name]
-    }));
+    // Quiz accuracy from recorded attempts
+    const [[quizAcc]] = await pool.query<RowDataPacket[]>(
+      `SELECT SUM(score) as correct, SUM(total) as total FROM user_activity WHERE user_id = ? AND activity_type = 'quiz' AND total > 0`,
+      [userId]
+    );
+    const quizAccuracy = Number(quizAcc.total) > 0 ? Math.round((Number(quizAcc.correct) / Number(quizAcc.total)) * 100) : 0;
+
+    const activeDays14 = heatmap.slice(-14).filter(d => d.count > 0).length;
+    const pct = (n: number) => (analyzedDocs > 0 ? Math.min(100, Math.round((n / analyzedDocs) * 100)) : 0);
+
+    const skills = [
+      { key: 'basic', value: pct(levelCounts.basic) },
+      { key: 'intermediate', value: pct(levelCounts.intermediate) },
+      { key: 'advanced', value: pct(levelCounts.advanced) },
+      { key: 'quiz_accuracy', value: quizAccuracy },
+      { key: 'consistency', value: Math.round((activeDays14 / 14) * 100) },
+    ];
+
+    const totalPossibleLevels = analyzedDocs * 3;
 
     res.json({
       totalDocs,
-      totalConcepts,
-      understoodPercent,
-      needsReview,
-      totalQuizzes,
+      analyzedDocs,
+      totalConcepts: Number(conceptsRow.total) || 0,
+      totalQuizzes: Number(quizRow.total) || 0,
       completedLevels,
-      radarData,
-      donutData,
-      activityData
+      understoodPercent: totalPossibleLevels > 0 ? Math.round((completedLevels / totalPossibleLevels) * 100) : 0,
+      needsReview: Math.max(0, totalPossibleLevels - completedLevels),
+      levelCounts,
+      activityData,
+      heatmap,
+      weekActivity,
+      streak,
+      quizAccuracy,
+      skills,
     });
   } catch (error) {
+    console.error('Stats error:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Smart Review Room - chat with multiple documents
+// (declared before "/:id" routes for clarity)
+// ---------------------------------------------------------------------------
+router.post('/review-chat', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await syncUserQuota(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { message, history, documentIds } = req.body;
+    if (!message || !String(message).trim()) return res.status(400).json({ message: 'Message is required' });
+    if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+      return res.status(400).json({ message: 'Vui lòng chọn ít nhất một tài liệu' });
+    }
+
+    const placeholders = documentIds.map(() => '?').join(',');
+    const [docs] = await pool.query<RowDataPacket[]>(
+      `SELECT id, title FROM documents WHERE id IN (${placeholders}) AND user_id = ?`,
+      [...documentIds, userId]
+    );
+    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const documentContexts = [];
+    for (const doc of docs) {
+      const [concepts] = await pool.query<RowDataPacket[]>('SELECT name, summary FROM concepts WHERE document_id = ?', [doc.id]);
+      const content = concepts.map(c => `[${c.name}]:\n${c.summary}`).join('\n\n');
+      documentContexts.push({ title: doc.title, content });
+    }
+
+    const check = checkQuota(user, estimateChatCost(documentContexts.map(d => d.content).join('\n'), history, message));
+    if (!check.ok) return quotaExceeded(res, check, 'chat');
+
+    const aiResponse = await geminiReviewChat(message, history || [], documentContexts, resolveAiLang(req.headers['accept-language']));
+    await addTokenUsage(userId, aiResponse.tokensUsed || 50);
+    logActivity(userId, 'review');
+
+    res.json({ text: aiResponse.text, usage: await usagePayload(userId) });
+  } catch (error) {
+    console.error('Review chat error:', error);
+    res.status(500).json({ message: 'Lỗi khi chat ôn tập' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Single document
+// ---------------------------------------------------------------------------
+async function findOwnedDocument(docId: string, userId?: number) {
+  const [docs] = await pool.query<RowDataPacket[]>('SELECT * FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
+  return docs[0];
+}
+
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     const userId = req.user?.id;
 
-    const [docs] = await pool.query<RowDataPacket[]>('SELECT * FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
-    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+    const doc = await findOwnedDocument(docId, userId);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
 
-    const [concepts] = await pool.query<RowDataPacket[]>('SELECT * FROM concepts WHERE document_id = ?', [docId]);
-    const conceptsWithStatus = concepts.map(c => ({
-      ...c,
-      status: 'not_started'
-    }));
+    const [concepts] = await pool.query<RowDataPacket[]>('SELECT * FROM concepts WHERE document_id = ? ORDER BY id', [docId]);
+    const conceptsWithStatus = concepts.map(c => ({ ...c, status: 'not_started' }));
 
-    const [progressRows] = await pool.query<RowDataPacket[]>('SELECT level, is_completed FROM user_level_progress WHERE document_id = ? AND user_id = ?', [docId, userId]);
+    const [progressRows] = await pool.query<RowDataPacket[]>(
+      'SELECT level, is_completed FROM user_level_progress WHERE document_id = ? AND user_id = ?',
+      [docId, userId]
+    );
     const levelProgress = { basic: false, intermediate: false, advanced: false };
     for (const row of progressRows) {
       levelProgress[row.level as keyof typeof levelProgress] = !!row.is_completed;
@@ -278,34 +372,46 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       WHERE c.document_id = ?
     `, [docId]);
 
-    // Fallback if AI didn't generate valid relationships or they didn't match
     const finalRelationships: any[] = [...relationships];
     if (finalRelationships.length === 0 && conceptsWithStatus.length > 1) {
       for (let i = 0; i < conceptsWithStatus.length - 1; i++) {
-        // Link node to the next one
         finalRelationships.push({
           source: (conceptsWithStatus[i] as any).id,
           target: (conceptsWithStatus[i + 1] as any).id,
-          label: 'Tiếp theo'
+          label: '→'
         });
       }
     }
 
-    res.json({
-      document: docs[0],
-      concepts: conceptsWithStatus,
-      relationships: finalRelationships,
-      levelProgress
-    });
+    res.json({ document: doc, concepts: conceptsWithStatus, relationships: finalRelationships, levelProgress });
+  } catch (error) {
+    console.error('Get document error:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
 
+router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { title } = req.body;
+    if (!title || !String(title).trim()) return res.status(400).json({ message: 'Tên tài liệu không hợp lệ' });
+
+    const doc = await findOwnedDocument(req.params.id, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    await pool.query('UPDATE documents SET title = ? WHERE id = ?', [String(title).trim().slice(0, 255), req.params.id]);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
 router.get('/:id/quiz', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
-    const [questions] = await pool.query<RowDataPacket[]>('SELECT * FROM quiz_questions WHERE document_id = ?', [docId]);
+    const doc = await findOwnedDocument(docId, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const [questions] = await pool.query<RowDataPacket[]>('SELECT * FROM quiz_questions WHERE document_id = ? ORDER BY id', [docId]);
     const parsedQuestions = questions.map(q => ({
       ...q,
       options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
@@ -316,23 +422,46 @@ router.get('/:id/quiz', authenticateToken, async (req: AuthRequest, res: Respons
   }
 });
 
+router.post('/:id/quiz/attempt', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const doc = await findOwnedDocument(req.params.id, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const score = Math.max(0, Number(req.body.score) || 0);
+    const total = Math.max(0, Number(req.body.total) || 0);
+    logActivity(req.user?.id, 'quiz', req.params.id, { score: Math.min(score, total), total });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
 router.post('/:id/chat', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await syncUserQuota(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
     const { message, history } = req.body;
+    if (!message || !String(message).trim()) return res.status(400).json({ message: 'Message is required' });
 
-    // Verify ownership
-    const [docs] = await pool.query<RowDataPacket[]>('SELECT id FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
-    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+    const doc = await findOwnedDocument(docId, userId);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
 
-    // Build context
     const [concepts] = await pool.query<RowDataPacket[]>('SELECT name, summary FROM concepts WHERE document_id = ?', [docId]);
     const contextStr = concepts.map(c => `[${c.name}]:\n${c.summary}`).join('\n\n');
 
-    const aiResponse = await geminiChatWithDocument(contextStr, message, history || []);
+    const check = checkQuota(user, estimateChatCost(contextStr, history, message));
+    if (!check.ok) return quotaExceeded(res, check, 'chat');
 
-    res.json({ text: aiResponse });
+    const aiResponse = await geminiChatWithDocument(contextStr, message, history || [], resolveAiLang(req.headers['accept-language']));
+    await addTokenUsage(userId, aiResponse.tokensUsed || 50);
+    logActivity(userId, 'chat', docId);
+
+    res.json({ text: aiResponse.text, usage: await usagePayload(userId) });
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ message: 'Lỗi khi chat với AI' });
@@ -343,18 +472,26 @@ router.post('/:id/flashcards/generate', authenticateToken, async (req: AuthReque
   try {
     const docId = req.params.id;
     const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    // Verify ownership
-    const [docs] = await pool.query<RowDataPacket[]>('SELECT id FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
-    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+    const user = await syncUserQuota(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Build context
+    const doc = await findOwnedDocument(docId, userId);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+    if (doc.status !== 'analyzed') return res.status(400).json({ message: 'Tài liệu chưa phân tích xong.', code: 'NOT_READY' });
+
     const [concepts] = await pool.query<RowDataPacket[]>('SELECT name, summary FROM concepts WHERE document_id = ?', [docId]);
     const contextStr = concepts.map(c => `[${c.name}]:\n${c.summary}`).join('\n\n');
 
-    const flashcards = await geminiGenerateFlashcards(contextStr);
+    const check = checkQuota(user, PROMPT_OVERHEAD + estimateTextTokens(contextStr) + OUTPUT_RESERVE.flashcards);
+    if (!check.ok) return quotaExceeded(res, check, 'flashcards');
 
-    res.json(flashcards);
+    const flashcardResult = await geminiGenerateFlashcards(contextStr, resolveAiLang(req.headers['accept-language']));
+    await addTokenUsage(userId, flashcardResult.tokensUsed || 200);
+    logActivity(userId, 'flashcard', docId);
+
+    res.json({ cards: flashcardResult.data, usage: await usagePayload(userId) });
   } catch (error) {
     console.error('Flashcard error:', error);
     res.status(500).json({ message: 'Lỗi khi tạo flashcard' });
@@ -366,31 +503,36 @@ router.post('/:id/levels/:level/complete', authenticateToken, async (req: AuthRe
     const { id, level } = req.params;
     const userId = req.user?.id;
     const validLevels = ['basic', 'intermediate', 'advanced'];
-    
     if (!validLevels.includes(level)) return res.status(400).json({ message: 'Invalid level' });
 
+    const doc = await findOwnedDocument(id, userId);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
     await pool.query(
-      `INSERT INTO user_level_progress (user_id, document_id, level, is_completed)
-       VALUES (?, ?, ?, TRUE)
-       ON DUPLICATE KEY UPDATE is_completed = TRUE`,
+      `INSERT INTO user_level_progress (user_id, document_id, level, is_completed, completed_at)
+       VALUES (?, ?, ?, TRUE, NOW())
+       ON DUPLICATE KEY UPDATE is_completed = TRUE, completed_at = COALESCE(completed_at, NOW())`,
       [userId, id, level]
     );
+    logActivity(userId, 'level_complete', id);
 
     res.json({ success: true });
   } catch (error) {
+    console.error('Complete level error:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const docId = req.params.id;
-    const userId = req.user?.id;
-    const [docs] = await pool.query<RowDataPacket[]>('SELECT id FROM documents WHERE id = ? AND user_id = ?', [docId, userId]);
-    if (docs.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài liệu hoặc không có quyền' });
-    await pool.query('DELETE FROM documents WHERE id = ?', [docId]);
+    const doc = await findOwnedDocument(req.params.id, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu hoặc không có quyền' });
 
+    await pool.query('DELETE FROM user_activity WHERE document_id = ?', [req.params.id]);
+    await pool.query('DELETE FROM documents WHERE id = ?', [req.params.id]);
     res.json({ message: 'Đã xóa tài liệu thành công' });
   } catch (error) {
+    console.error('Delete document error:', error);
     res.status(500).json({ message: 'Lỗi server khi xóa tài liệu' });
   }
 });

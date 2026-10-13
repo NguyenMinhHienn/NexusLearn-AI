@@ -1,317 +1,385 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { FileText, BookOpen, Brain, TrendingUp, Plus, Clock, Trash2, ArrowRight, Sparkles, Target, Zap, Upload, CheckCircle2 } from 'lucide-react'
-import { motion } from 'framer-motion'
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, PieChart, Pie, Cell } from 'recharts'
-import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
+import { useAuth } from '../contexts/AuthContext'
+import { ArrowRight, BookOpen, Upload, Flame, Loader2, PartyPopper, MessageSquareText } from 'lucide-react'
+import { currentLocale } from '../i18n'
+
+interface HeatCell { date: string; count: number }
+
+const progressOf = (d: any) => Math.round((Math.min(Number(d?.completed_levels) || 0, 3) / 3) * 100)
+
+/** Bucket a raw activity count into 0-4 intensity levels. */
+const intensity = (count: number) => (count <= 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4)
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const { t } = useTranslation()
-  const [documents, setDocuments] = useState<any[]>([])
-  const [stats, setStats] = useState({ 
-    totalDocs: 0, 
-    totalConcepts: 0, 
-    understoodPercent: 0, 
-    needsReview: 0, 
-    totalQuizzes: 0,
-    completedLevels: 0,
-    radarData: [],
-    donutData: [],
-    activityData: [] 
-  })
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<any>(null)
+  const [documents, setDocuments] = useState<any[]>([])
+  const locale = currentLocale()
 
   useEffect(() => {
-    Promise.all([
-      axios.get('/api/documents'),
-      axios.get('/api/documents/stats/summary')
-    ])
-      .then(([docsRes, statsRes]) => {
-        setDocuments(docsRes.data)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let cancelled = false
+
+    const fetchData = async () => {
+      try {
+        const [statsRes, docsRes] = await Promise.all([
+          axios.get('/api/documents/stats/summary'),
+          axios.get('/api/documents')
+        ])
+        if (cancelled) return
         setStats(statsRes.data)
-      })
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false))
+        setDocuments(Array.isArray(docsRes.data) ? docsRes.data : [])
+        // Keep polling while AI is still analyzing something
+        if (docsRes.data?.some?.((d: any) => d.status === 'processing')) {
+          timer = setTimeout(fetchData, 5000)
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard data', err)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [])
 
-  const handleDelete = async (e: React.MouseEvent, id: number) => {
-    e.preventDefault()
-    if (!window.confirm(t('dashboard.delete_confirm'))) return
-    try {
-      await axios.delete(`/api/documents/${id}`)
-      setDocuments(docs => docs.filter(doc => doc.id !== id))
-    } catch (err) {
-      alert(t('dashboard.delete_error'))
-    }
+  const analyzedDocs = useMemo(() => documents.filter(d => d.status === 'analyzed'), [documents])
+  const processingDocs = useMemo(() => documents.filter(d => d.status === 'processing'), [documents])
+  // Most recently touched analyzed document that is NOT finished yet
+  const activeDoc = useMemo(() => analyzedDocs.find(d => progressOf(d) < 100) || null, [analyzedDocs])
+  const allCompleted = analyzedDocs.length > 0 && !activeDoc
+  const otherDocs = useMemo(() => documents.filter(d => d.id !== activeDoc?.id).slice(0, 4), [documents, activeDoc])
+
+  // Heatmap: 12 columns (weeks) x 7 rows (Mon..Sun)
+  const heatmapWeeks = useMemo(() => {
+    const cells: HeatCell[] = stats?.heatmap || []
+    if (cells.length === 0) return []
+    // Align so each column starts on Monday
+    const first = new Date(cells[0].date + 'T00:00:00')
+    const mondayOffset = (first.getDay() + 6) % 7
+    const padded: (HeatCell | null)[] = [...Array(mondayOffset).fill(null), ...cells]
+    const weeks: (HeatCell | null)[][] = []
+    for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
+    return weeks.slice(-12)
+  }, [stats?.heatmap])
+
+  const weekdayShort = (dayIndexFromMonday: number) => {
+    // 2024-01-01 is a Monday
+    const d = new Date(2024, 0, 1 + dayIndexFromMonday)
+    return d.toLocaleDateString(locale, { weekday: 'short' })
   }
 
-  const containerVariants: any = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  if (loading) {
+    return (
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 md:py-12 animate-pulse">
+        <div className="h-8 w-64 bg-[var(--border-color)] rounded mb-3" />
+        <div className="h-4 w-48 bg-[var(--border-color)] rounded mb-12" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 h-56 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg" />
+          <div className="h-56 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg" />
+        </div>
+      </div>
+    )
   }
 
-  const itemVariants: any = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
-  }
+  const nameParts = (user?.name || '').trim().split(/\s+/).filter(Boolean)
+  const firstName = (locale === 'vi-VN' ? nameParts[nameParts.length - 1] : nameParts[0]) || t('dashboard.greeting_fallback')
+  const skills: { key: string; value: number }[] = stats?.skills || []
+  const hasSkillData = skills.some(s => s.value > 0)
 
   return (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="w-full">
+    <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 md:py-12">
       
-      {/* 1. HERO BANNER - MIND BLOWING */}
-      <motion.div variants={itemVariants} className="relative w-full h-[280px] rounded-[2.5rem] mb-8 overflow-hidden shadow-2xl dark:shadow-indigo-900/20 group">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-primary-700 to-violet-900"></div>
-        
-        {/* Animated Background Orbs */}
-        <div className="absolute top-[-50%] left-[-10%] w-96 h-96 bg-white/20 rounded-full mix-blend-overlay filter blur-3xl opacity-50 animate-blob"></div>
-        <div className="absolute bottom-[-50%] right-[-10%] w-96 h-96 bg-cyan-400/30 rounded-full mix-blend-overlay filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
-
-        {/* Chart in background */}
-        <div className="absolute bottom-0 left-0 w-full h-32 opacity-30 pointer-events-none">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={stats.activityData || []}>
-              <defs>
-                <linearGradient id="heroGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#fff" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#fff" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="value" stroke="none" fill="url(#heroGradient)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="absolute inset-0 p-8 sm:p-12 flex flex-col justify-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-md text-white text-sm font-medium w-max mb-6 border border-white/20">
-            <Sparkles size={16} /> {t('dashboard.premium')}
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-heading font-extrabold text-white mb-4 drop-shadow-md">
-            {t('dashboard.hero_title', { name: user?.name?.split(' ')?.[0] || 'bạn' })}
+      {/* 1. Header & Quick Stats Strip */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+        <div>
+          <h1 className="text-[28px] md:text-[32px] font-heading font-semibold tracking-tight text-[var(--text-main)] mb-1">
+            {t('dashboard.greeting', { name: firstName })}
           </h1>
-          <p className="text-indigo-100 text-lg max-w-xl leading-relaxed">
-            {t('dashboard.hero_desc')}
+          <p className="text-sm md:text-base text-[var(--text-muted)] flex items-center gap-2 flex-wrap">
+            {t('dashboard.subtitle')}
+            {stats?.streak > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-xs font-semibold">
+                <Flame size={12} /> {t('dashboard.streak', { count: stats.streak })}
+              </span>
+            )}
           </p>
-          <div className="mt-8 flex gap-4">
-            <Link to="/app/upload" className="px-8 py-3.5 bg-white text-indigo-600 hover:bg-slate-50 rounded-2xl font-bold shadow-lg transition-transform hover:-translate-y-1 flex items-center gap-2">
-              <Upload size={20} /> {t('dashboard.upload_doc')}
-            </Link>
-            <button className="px-8 py-3.5 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-2xl font-bold transition-transform hover:-translate-y-1 flex items-center gap-2 border border-white/20">
-              <Target size={20} /> {t('dashboard.review_now')}
-            </button>
-          </div>
         </div>
-      </motion.div>
 
-      {/* 2. STATS CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
-        <motion.div variants={itemVariants} className="glass-card p-5 sm:p-6 relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
-          <FileText size={28} className="text-indigo-500 mb-4" />
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.totalDocs}</div>
-          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('dashboard.total_docs')}</div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card p-5 sm:p-6 relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all"></div>
-          <Brain size={28} className="text-cyan-500 mb-4" />
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.totalConcepts}</div>
-          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('dashboard.total_concepts')}</div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card p-5 sm:p-6 relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-pink-500/10 rounded-full blur-2xl group-hover:bg-pink-500/20 transition-all"></div>
-          <Target size={28} className="text-pink-500 mb-4" />
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.totalQuizzes}</div>
-          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('dashboard.total_quizzes')}</div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="glass-card p-5 sm:p-6 relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
-          <CheckCircle2 size={28} className="text-emerald-500 mb-4" />
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{stats.completedLevels}</div>
-          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('dashboard.completed_levels')}</div>
-        </motion.div>
-      </div>
-
-      {/* 3. CHARTS GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
-        {/* Left Column: Activity Bar Chart */}
-        <motion.div variants={itemVariants} className="lg:col-span-2 glass-card p-6 flex flex-col relative overflow-hidden group">
-           <div className="flex justify-between items-center mb-6">
-             <div>
-               <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                 <Zap size={20} className="text-amber-500" /> {t('dashboard.learning_intensity')}
-               </h3>
-               <p className="text-sm text-slate-500">{t('dashboard.learning_intensity_desc')}</p>
-             </div>
-             <div className="px-3 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400 text-sm font-semibold border border-primary-100 dark:border-primary-900/30">
-               {t('dashboard.this_week')}
-             </div>
-           </div>
-           
-           <div className="flex-1 min-h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.activityData || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--primary)" stopOpacity={1}/>
-                    <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.6}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}
-                  cursor={{ fill: 'var(--primary)', opacity: 0.05 }}
-                />
-                <Bar dataKey="value" fill="url(#barGradient)" radius={[6, 6, 0, 0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-           </div>
-        </motion.div>
-
-        {/* Right Column: Radar & Donut Charts */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          {/* Radar Chart */}
-          <motion.div variants={itemVariants} className="glass-card p-6 flex flex-col flex-1 min-h-[250px]">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{t('dashboard.skill_assessment')}</h3>
-            <div className="flex-1 w-full -mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="65%" data={stats.radarData || []}>
-                  <PolarGrid stroke="var(--border)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
-                  <Radar name="Kỹ năng" dataKey="A" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.5} />
-                  <Tooltip />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          {/* Donut Chart */}
-          <motion.div variants={itemVariants} className="glass-card p-6 flex flex-col flex-1 min-h-[250px]">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{t('dashboard.level_proportion')}</h3>
-            <div className="flex-1 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stats.donutData || []}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {(stats.donutData || []).map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', backgroundColor: 'var(--bg-card)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col">
-                <span className="text-2xl font-black text-slate-900 dark:text-white leading-none">{stats.completedLevels}</span>
-                <span className="text-xs font-medium text-slate-500">Hoàn thành</span>
+        <div className="flex flex-wrap items-center gap-6 text-sm border border-[var(--border-color)] rounded-lg px-6 py-4 bg-[var(--bg-surface)]">
+          {[
+            { label: t('dashboard.stat_docs'), value: stats?.totalDocs },
+            { label: t('dashboard.stat_concepts'), value: stats?.totalConcepts },
+            { label: t('dashboard.stat_questions'), value: stats?.totalQuizzes },
+            { label: t('dashboard.stat_levels'), value: stats?.completedLevels },
+          ].map((s, i) => (
+            <div key={s.label} className="flex items-center gap-6">
+              {i > 0 && <div className="w-px h-8 bg-[var(--border-color)] hidden sm:block" />}
+              <div className="flex flex-col">
+                <span className="text-[var(--text-muted)] text-xs uppercase font-medium mb-1 tracking-wider">{s.label}</span>
+                <span className="font-heading font-semibold text-xl text-[var(--text-main)] tabular-nums tracking-tight">{s.value || 0}</span>
               </div>
             </div>
-          </motion.div>
+          ))}
         </div>
       </div>
 
-      {/* 3. DOCUMENTS SECTION */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-heading font-bold text-slate-900 dark:text-white">{t('dashboard.recent_docs')}</h2>
-        <Link to="/app/documents" className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 flex items-center gap-1 group">
-          {t('dashboard.view_all')} <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+      {/* Processing banner */}
+      {processingDocs.length > 0 && (
+        <Link
+          to={`/app/documents/${processingDocs[0].id}`}
+          className="mb-8 flex items-center gap-3 px-5 py-3.5 rounded-lg border border-amber-500/30 bg-amber-500/5 text-sm hover:bg-amber-500/10 transition-colors"
+        >
+          <Loader2 size={16} className="text-amber-500 animate-spin shrink-0" />
+          <span className="font-medium text-[var(--text-main)]">{t('dashboard.processing_title', { count: processingDocs.length })}</span>
+          <span className="text-[var(--text-muted)] hidden sm:inline">— {t('dashboard.processing_desc')}</span>
+          <ArrowRight size={14} className="ml-auto text-[var(--text-muted)]" />
         </Link>
-      </motion.div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-12">
-        {loading ? (
-          <div className="col-span-full py-12 flex items-center justify-center text-slate-500">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mr-3"></div>
-            {t('dashboard.loading')}
-          </div>
-        ) : documents.map((doc) => {
-          const progress = Math.round(((doc.completed_levels || 0) / 3) * 100)
-          return (
-            <motion.div key={doc.id} variants={itemVariants}>
-              <div className="glass-card p-6 hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-indigo-900/20 transition-all duration-300 relative group flex flex-col h-full">
-                <button 
-                  onClick={(e) => handleDelete(e, doc.id)}
-                  className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-all z-10"
-                  title="Xóa tài liệu"
-                >
-                  <Trash2 size={18} />
-                </button>
-                
-                <div className="flex gap-4 mb-5">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-100 to-primary-100 dark:from-indigo-500/20 dark:to-primary-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform shadow-inner">
-                    <FileText size={26} />
-                  </div>
-                  <div className="flex-1 min-w-0 pr-8 flex flex-col justify-center">
-                    <h3 className="font-bold text-slate-900 dark:text-white truncate text-lg mb-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{doc.title}</h3>
-                    <div className="flex items-center gap-3 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><Brain size={14} /> {doc.concepts_count} {t('dashboard.concepts')}</span>
-                      <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                      <span className="flex items-center gap-1"><Clock size={14} /> {new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
+      {/* 2. Main Layout Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12 items-start">
+        
+        {/* Left Column (2/3) - Priority: Continue Learning */}
+        <div className="lg:col-span-2 space-y-12">
+          
+          <section>
+            <h2 className="text-sm font-semibold tracking-wide text-[var(--text-muted)] uppercase mb-4">{t('dashboard.continue_learning')}</h2>
+            
+            {activeDoc ? (
+              <div className="minimal-card p-6 md:p-8 relative overflow-hidden group">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="min-w-0">
+                    <h3 className="text-xl font-heading font-semibold text-[var(--text-main)] mb-2 truncate max-w-sm">
+                      {activeDoc.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                      <span className="font-medium text-[var(--text-main)]">{activeDoc.concepts_count || 0} {t('common.concepts')}</span>
+                      <span>•</span>
+                      <span className="text-[var(--accent)] font-medium">{t('dashboard.percent_completed', { percent: progressOf(activeDoc) })}</span>
                     </div>
                   </div>
+
+                  <div className="flex gap-3 shrink-0">
+                    <Link 
+                      id="dashboard-flashcards-btn"
+                      to={`/app/documents/${activeDoc.id}/flashcards`}
+                      className="px-4 py-2.5 text-sm font-medium text-[var(--text-main)] bg-[var(--bg-surface)] border border-[var(--border-color)] hover:border-[var(--text-muted)] rounded transition-colors"
+                    >
+                      {t('dashboard.practice_flashcards')}
+                    </Link>
+                    <Link 
+                      id="dashboard-learn-btn"
+                      to={`/app/documents/${activeDoc.id}`} 
+                      className="px-4 py-2.5 text-sm font-medium bg-[var(--text-main)] text-[var(--bg-main)] hover:opacity-90 rounded transition-opacity"
+                    >
+                      {t('dashboard.learn_now')}
+                    </Link>
+                  </div>
                 </div>
 
-                <div className="mb-6 flex-1">
-                  <div className="flex justify-between items-end mb-2 text-sm">
-                    <span className="font-semibold text-slate-600 dark:text-slate-300">Tiến độ</span>
-                    <span className="font-bold text-primary-600 dark:text-primary-400">{progress}%</span>
-                  </div>
-                  <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800/50 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className="h-full rounded-full bg-gradient-to-r from-primary-500 to-indigo-500 shadow-sm"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
+                <div className="absolute bottom-0 left-0 h-1 bg-[var(--border-color)] w-full">
+                  <div className="h-full bg-[var(--accent)] transition-all duration-1000" style={{ width: `${progressOf(activeDoc)}%` }}></div>
                 </div>
-
-                <div className="flex gap-2 mt-auto">
-                  <Link
-                    to={`/app/documents/${doc.id}/flashcards`}
-                    className="px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Brain size={16} /> Flashcard
+              </div>
+            ) : allCompleted ? (
+              <div className="minimal-card p-8 flex flex-col md:flex-row items-start md:items-center gap-6">
+                <div className="w-12 h-12 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shrink-0">
+                  <PartyPopper size={22} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium text-[var(--text-main)] mb-1">{t('dashboard.all_completed_title')}</h3>
+                  <p className="text-sm text-[var(--text-muted)]">{t('dashboard.all_completed_desc')}</p>
+                </div>
+                <div className="flex gap-3 shrink-0">
+                  <Link to="/app/review" className="px-4 py-2.5 text-sm font-medium text-[var(--text-main)] border border-[var(--border-color)] hover:border-[var(--text-muted)] rounded transition-colors flex items-center gap-2">
+                    <MessageSquareText size={15} /> {t('dashboard.review_now')}
                   </Link>
-                  <Link
-                    to={`/app/documents/${doc.id}`}
-                    className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl transition-all shadow-md shadow-primary-500/20 flex items-center justify-center gap-2"
-                  >
-                    {doc.status === 'analyzed' ? (
-                      <>Vào học ngay <ArrowRight size={16} /></>
-                    ) : (
-                      <>Đang xử lý...</>
-                    )}
+                  <Link to="/app/upload" className="px-4 py-2.5 text-sm font-medium bg-[var(--text-main)] text-[var(--bg-main)] hover:opacity-90 rounded transition-opacity flex items-center gap-2">
+                    <Upload size={15} /> {t('dashboard.upload_more')}
                   </Link>
                 </div>
               </div>
-            </motion.div>
-          )
-        })}
+            ) : (
+              <div className="minimal-card p-8 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)] mb-4">
+                  <BookOpen size={24} />
+                </div>
+                <h3 className="text-lg font-medium text-[var(--text-main)] mb-2">{t('dashboard.no_docs_title')}</h3>
+                <p className="text-[var(--text-muted)] mb-6 text-sm max-w-xs">{t('dashboard.no_docs_desc')}</p>
+                <Link to="/app/upload" className="px-5 py-2.5 text-sm font-medium bg-[var(--text-main)] text-[var(--bg-main)] hover:opacity-90 rounded transition-opacity flex items-center gap-2">
+                  <Upload size={16} /> {t('dashboard.upload_cta')}
+                </Link>
+              </div>
+            )}
+          </section>
 
-        {/* Add New Document Card */}
-        <motion.div variants={itemVariants}>
-          <Link 
-            to="/app/upload" 
-            className="flex flex-col items-center justify-center gap-4 min-h-[200px] h-full rounded-[1.5rem] border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 text-slate-500 hover:text-primary-600 hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-all duration-300 group"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 group-hover:bg-primary-100 dark:group-hover:bg-primary-900/40 flex items-center justify-center transition-colors shadow-sm group-hover:shadow-md">
-              <Plus size={32} className="group-hover:scale-110 transition-transform" />
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold tracking-wide text-[var(--text-muted)] uppercase">{t('dashboard.other_docs')}</h2>
+              {documents.length > 0 && (
+                <Link id="dashboard-view-all" to="/app/documents" className="text-sm font-medium text-[var(--text-main)] hover:underline flex items-center gap-1">
+                  {t('dashboard.view_all')} <ArrowRight size={14} />
+                </Link>
+              )}
             </div>
-            <span className="font-bold text-lg">Tải lên tài liệu mới</span>
-          </Link>
-        </motion.div>
+            
+            <div className="space-y-3">
+              {otherDocs.length > 0 ? (
+                otherDocs.map((doc: any) => (
+                  <Link to={`/app/documents/${doc.id}`} key={doc.id} className="p-4 md:p-5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[var(--text-muted)] transition-colors flex items-center justify-between group">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-10 h-10 shrink-0 rounded bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">
+                        {doc.status === 'processing' ? <Loader2 size={18} className="animate-spin text-amber-500" /> : <BookOpen size={18} />}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-medium text-[var(--text-main)] mb-0.5 truncate">{doc.title}</h4>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {doc.status === 'analyzed'
+                            ? `${doc.concepts_count || 0} ${t('common.concepts')} • ${t('dashboard.percent_completed', { percent: progressOf(doc) })}`
+                            : t(`status.${doc.status}`)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-[var(--text-muted)] group-hover:text-[var(--text-main)] group-hover:translate-x-0.5 transition-all shrink-0">
+                      <ArrowRight size={18} />
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="p-6 md:p-8 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] flex flex-col items-start gap-4">
+                  <div className="w-10 h-10 rounded bg-[var(--bg-main)] flex items-center justify-center text-[var(--text-muted)]">
+                    <Upload size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-medium text-[var(--text-main)] mb-1">{t('dashboard.no_other_title')}</h4>
+                    <p className="text-sm text-[var(--text-muted)]">{t('dashboard.no_other_desc')}</p>
+                  </div>
+                  <Link 
+                    to="/app/upload" 
+                    className="mt-2 px-5 py-2.5 text-sm font-medium text-[var(--bg-main)] bg-[var(--text-main)] hover:opacity-90 transition-opacity rounded flex items-center gap-2"
+                  >
+                    <Upload size={16} />
+                    <span>{t('dashboard.upload_new')}</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </section>
+
+        </div>
+
+        {/* Right Column (1/3) - Analytics */}
+        <div className="lg:col-span-1 space-y-12">
+          
+          <section>
+            <h2 className="text-sm font-semibold tracking-wide text-[var(--text-muted)] uppercase mb-4">{t('dashboard.weekly_activity')}</h2>
+            
+            <div className="p-6 minimal-card">
+              <div className="flex items-end gap-2 mb-6">
+                <span className="text-4xl font-heading font-semibold tracking-tight text-[var(--text-main)] tabular-nums">{stats?.weekActivity || 0}</span>
+                <span className="text-sm font-medium text-[var(--text-muted)] mb-1">{t('dashboard.activities_this_week')}</span>
+              </div>
+
+              {/* Last 7 days bars */}
+              <div className="flex items-end justify-between gap-1.5 h-16 mb-6">
+                {(stats?.activityData || []).map((d: HeatCell) => {
+                  const max = Math.max(1, ...(stats?.activityData || []).map((x: HeatCell) => x.count))
+                  const h = d.count > 0 ? Math.max(12, (d.count / max) * 100) : 6
+                  const dayLabel = new Date(d.date + 'T00:00:00').toLocaleDateString(locale, { weekday: 'narrow' })
+                  return (
+                    <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                      <div
+                        className={`w-full rounded-sm transition-all duration-700 ${d.count > 0 ? 'bg-[var(--accent)]' : 'bg-[var(--border-color)]'}`}
+                        style={{ height: `${h}%` }}
+                      />
+                      <span className="text-[10px] text-[var(--text-muted)] font-medium">{dayLabel}</span>
+                      <div className="absolute bottom-full mb-1 px-2 py-1 bg-[var(--text-main)] text-[var(--bg-main)] text-[10px] whitespace-nowrap rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        {d.count === 0 ? t('dashboard.no_activity') : t('dashboard.activity_count', { count: d.count })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* 12-week Heatmap */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
+                  <div className="flex flex-col gap-1.5 text-[9px] font-medium text-[var(--text-muted)] pr-1">
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <span key={i} className="h-3.5 leading-[14px]">{i % 2 === 0 ? weekdayShort(i) : ''}</span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    {heatmapWeeks.map((week, wIdx) => (
+                      <div key={wIdx} className="flex flex-col gap-1.5">
+                        {Array.from({ length: 7 }).map((_, dIdx) => {
+                          const cell = week[dIdx]
+                          if (!cell) return <div key={dIdx} className="w-3.5 h-3.5" />
+                          const lvl = intensity(cell.count)
+                          return (
+                            <div 
+                              key={dIdx} 
+                              className="w-3.5 h-3.5 rounded-sm transition-colors hover:ring-1 hover:ring-[var(--text-main)] group relative"
+                              style={{ 
+                                backgroundColor: lvl === 0 
+                                  ? 'var(--border-color)' 
+                                  : `color-mix(in srgb, var(--accent) ${lvl * 25}%, var(--bg-main))`
+                              }}
+                            >
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-[var(--text-main)] text-[var(--bg-main)] text-[10px] whitespace-nowrap rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                {new Date(cell.date + 'T00:00:00').toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })}
+                                {' · '}
+                                {cell.count === 0 ? t('dashboard.no_activity') : t('dashboard.activity_count', { count: cell.count })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-1.5 text-[10px] text-[var(--text-muted)] font-medium mt-1">
+                  <span>{t('dashboard.less')}</span>
+                  <div className="w-3 h-3 rounded-sm bg-[var(--border-color)]"></div>
+                  {[1, 2, 3, 4].map(l => (
+                    <div key={l} className="w-3 h-3 rounded-sm" style={{ backgroundColor: `color-mix(in srgb, var(--accent) ${l * 25}%, var(--bg-main))` }}></div>
+                  ))}
+                  <span>{t('dashboard.more')}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold tracking-wide text-[var(--text-muted)] uppercase mb-4">{t('dashboard.skills')}</h2>
+            
+            <div className="minimal-card p-6 space-y-6">
+              {!hasSkillData && (
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">{t('dashboard.skills_empty')}</p>
+              )}
+              {skills.map(skill => (
+                <div key={skill.key} className="space-y-2">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-[var(--text-main)]">{t(`dashboard.skill_${skill.key}`)}</span>
+                    <span className="text-[var(--text-muted)] tabular-nums">{skill.value}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-[var(--border-color)] rounded-full overflow-hidden">
+                    <div className="h-full bg-[var(--text-main)] rounded-full transition-all duration-1000" style={{ width: `${skill.value}%` }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+        </div>
       </div>
-    </motion.div>
+    </div>
   )
 }

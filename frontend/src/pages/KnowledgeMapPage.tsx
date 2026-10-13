@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
-import { ArrowLeft, Flag, Check, Lock, Map as MapIcon, ChevronRight, Network, List } from 'lucide-react'
+import { ArrowLeft, Flag, Check, Lock, Map as MapIcon, Network, List, Download } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
   ReactFlow,
@@ -18,35 +18,37 @@ import '@xyflow/react/dist/style.css'
 import { Handle, Position } from '@xyflow/react'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { Download } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import ChatWidget from '../components/ChatWidget'
 
 const CustomNode = ({ data, isConnectable }: any) => {
-  const isBasic = data.level === 'basic' || !data.level;
+  const { t } = useTranslation()
   const isIntermediate = data.level === 'intermediate';
   const isAdvanced = data.level === 'advanced';
   
-  let bgClass = 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700';
-  let textClass = 'text-slate-800 dark:text-slate-200';
-  let indicatorClass = 'bg-slate-400';
+  let bgClass = 'bg-[var(--bg-surface)] border-[var(--border-color)]';
+  let textClass = 'text-[var(--text-main)]';
+  let indicatorClass = 'bg-[var(--text-muted)]';
   
   if (isIntermediate) {
-    bgClass = 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800/50';
-    textClass = 'text-blue-900 dark:text-blue-100';
-    indicatorClass = 'bg-blue-500';
+    indicatorClass = 'bg-[var(--accent)]';
   } else if (isAdvanced) {
-    bgClass = 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800/50';
-    textClass = 'text-purple-900 dark:text-purple-100';
-    indicatorClass = 'bg-purple-500';
+    indicatorClass = 'bg-[var(--text-main)]';
   }
 
   return (
-    <div className={`relative px-6 py-5 rounded-2xl border-2 border-b-[6px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 w-[280px] ${bgClass}`}>
-      <Handle type="target" position={Position.Top} isConnectable={isConnectable} className="w-3 h-3 bg-indigo-500 border-2 border-white dark:border-slate-900" />
-      <div className="flex flex-col items-center text-center gap-2">
-        <div className={`w-12 h-1.5 rounded-full ${indicatorClass} mb-2 opacity-50`}></div>
-        <p className={`font-bold text-[15px] leading-tight ${textClass}`}>{data.label}</p>
+    <div className={`relative px-4 py-3 rounded border shadow-sm w-[240px] ${bgClass}`}>
+      <Handle type="target" position={Position.Top} isConnectable={isConnectable} className="w-2 h-2 bg-[var(--text-main)] border-0 rounded-none" />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-sm ${indicatorClass}`}></div>
+          <span className="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">
+            {isAdvanced ? t('levels.advanced') : isIntermediate ? t('levels.intermediate') : t('levels.basic')}
+          </span>
+        </div>
+        <p className={`font-medium text-sm leading-snug ${textClass}`}>{data.label}</p>
       </div>
-      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} className="w-3 h-3 bg-indigo-500 border-2 border-white dark:border-slate-900" />
+      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} className="w-2 h-2 bg-[var(--text-main)] border-0 rounded-none" />
     </div>
   )
 }
@@ -55,6 +57,7 @@ const nodeTypes = { custom: CustomNode };
 
 export default function KnowledgeMapPage() {
   const { id } = useParams()
+  const { t } = useTranslation()
   const [docData, setDocData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<'timeline' | 'graph'>('timeline')
@@ -81,7 +84,7 @@ export default function KnowledgeMapPage() {
       pdf.save(`NexusLearn-Map-${id}.pdf`);
     } catch (error) {
       console.error('Error exporting PDF:', error);
-      alert('Đã xảy ra lỗi khi xuất PDF.');
+      alert(t('map.pdf_error'));
     }
   }
 
@@ -121,7 +124,7 @@ export default function KnowledgeMapPage() {
         levelCounts[lvl]++
         
         const totalInLevel = levelTotals[lvl]
-        const spacingX = 350
+        const spacingX = 300
         // Center the nodes based on how many are in this level
         const startX = (window.innerWidth / 2) - ((totalInLevel * spacingX) / 2) + 50
         
@@ -130,7 +133,7 @@ export default function KnowledgeMapPage() {
           type: 'custom',
           position: { x: startX + (count * spacingX), y: levelY[lvl] },
           data: { label: c.name, level: c.level },
-          style: { width: 280 }
+          style: { width: 240 }
         }
       })
 
@@ -140,14 +143,14 @@ export default function KnowledgeMapPage() {
         target: (r.target || '').toString(),
         label: r.label,
         animated: true,
-        style: { stroke: '#6366f1', strokeWidth: 3, opacity: 0.8 },
-        labelStyle: { fill: '#4f46e5', fontWeight: 700, fontSize: 12 },
-        labelBgStyle: { fill: '#ffffff', fillOpacity: 0.9, stroke: '#e0e7ff', strokeWidth: 1 },
+        style: { stroke: 'var(--text-muted)', strokeWidth: 1, opacity: 0.5 },
+        labelStyle: { fill: 'var(--text-main)', fontWeight: 500, fontSize: 10 },
+        labelBgStyle: { fill: 'var(--bg-main)', fillOpacity: 0.9, stroke: 'var(--border-color)', strokeWidth: 1 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: '#6366f1',
-          width: 20,
-          height: 20,
+          color: 'var(--text-muted)',
+          width: 15,
+          height: 15,
         },
       }))
 
@@ -158,29 +161,29 @@ export default function KnowledgeMapPage() {
 
   if (loading) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-500 font-medium">Đang tải bản đồ kiến thức...</p>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-4 animate-pulse">
+        <div className="w-8 h-8 border border-[var(--border-color)] border-t-[var(--text-main)] rounded-full animate-spin"></div>
+        <p className="text-sm text-[var(--text-muted)] uppercase tracking-widest font-medium">{t('map.loading')}</p>
       </div>
     )
   }
 
   if (!docData || !docData.document) {
     return (
-      <div className="w-full h-[60vh] flex flex-col items-center justify-center">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Không tìm thấy tài liệu</h2>
+      <div className="w-full h-[60vh] flex flex-col items-center justify-center gap-3">
+        <h2 className="text-lg font-medium text-[var(--text-main)]">{t('document.not_found')}</h2>
+        <Link to="/app/documents" className="text-sm underline text-[var(--text-muted)] hover:text-[var(--text-main)]">{t('common.back_to_library')}</Link>
       </div>
     )
   }
 
-  const doc = docData.document;
   const concepts = docData.concepts || [];
   const levelProgress = docData.levelProgress || { basic: false, intermediate: false, advanced: false };
 
   const levels = [
-    { id: 'basic', label: 'Chặng 1: Nền tảng', completed: levelProgress.basic, locked: false },
-    { id: 'intermediate', label: 'Chặng 2: Nâng cao', completed: levelProgress.intermediate, locked: !levelProgress.basic },
-    { id: 'advanced', label: 'Chặng 3: Chuyên sâu', completed: levelProgress.advanced, locked: !levelProgress.intermediate },
+    { id: 'basic', label: t('levels.stage_basic'), completed: levelProgress.basic, locked: false },
+    { id: 'intermediate', label: t('levels.stage_intermediate'), completed: levelProgress.intermediate, locked: !levelProgress.basic },
+    { id: 'advanced', label: t('levels.stage_advanced'), completed: levelProgress.advanced, locked: !levelProgress.intermediate },
   ];
 
   let currentLevelId = 'basic';
@@ -192,52 +195,53 @@ export default function KnowledgeMapPage() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="max-w-6xl mx-auto py-8 px-4"
+      className="max-w-6xl mx-auto py-8 px-4 sm:px-8"
     >
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-6 rounded-b-[2rem] shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
         <div>
-          <Link to={`/app/documents/${id}`} className="inline-flex items-center gap-2 text-slate-500 hover:text-primary-500 font-semibold mb-2 transition-colors">
-            <ArrowLeft size={16} /> Quay lại bài học
+          <Link to={`/app/documents/${id}`} className="inline-flex items-center gap-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] mb-4 transition-colors uppercase tracking-wider">
+            <ArrowLeft size={14} /> {t('common.back_to_document')}
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-heading font-black text-slate-900 dark:text-white flex items-center gap-3">
-            <MapIcon className="text-primary-500" /> Bản Đồ Tri Thức
+          <h1 className="text-[28px] md:text-[32px] font-heading font-semibold tracking-tight text-[var(--text-main)] flex items-center gap-3">
+            {t('map.title')}
           </h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-1">{docData.document.title}</p>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl">
+        <div className="flex items-center gap-3 border-l border-[var(--border-color)] pl-6">
+          <div className="flex bg-[var(--bg-surface)] border border-[var(--border-color)] p-0.5 rounded">
             <button 
               onClick={() => setViewMode('timeline')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${viewMode === 'timeline' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm font-medium text-xs transition-colors ${viewMode === 'timeline' ? 'bg-[var(--bg-main)] text-[var(--text-main)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
             >
-              <List size={16} /> Lộ trình
+              <List size={14} /> {t('map.timeline')}
             </button>
             <button 
               onClick={() => setViewMode('graph')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${viewMode === 'graph' ? 'bg-white dark:bg-slate-700 text-primary-600 dark:text-primary-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm font-medium text-xs transition-colors ${viewMode === 'graph' ? 'bg-[var(--bg-main)] text-[var(--text-main)] shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
             >
-              <Network size={16} /> Lưới Đồ thị
+              <Network size={14} /> {t('map.graph')}
             </button>
           </div>
           
           <button 
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-indigo-500/30"
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--text-main)] hover:opacity-90 text-[var(--bg-main)] rounded font-medium text-xs transition-opacity"
           >
-            <Download size={16} /> Xuất PDF
+            <Download size={14} /> {t('map.save_pdf')}
           </button>
         </div>
       </div>
 
-      <div id="knowledge-map-container" className="bg-slate-50 dark:bg-slate-950 rounded-[2rem]">
+      <div id="knowledge-map-container" className="w-full min-h-[65vh]">
         {viewMode === 'timeline' ? (
-        <div className="relative py-10 px-4 max-w-4xl mx-auto">
+        <div className="relative py-8 px-4 max-w-4xl mx-auto border border-[var(--border-color)] bg-[var(--bg-surface)] rounded-lg">
           {/* Background Line */}
-          <div className="absolute left-8 md:left-1/2 top-0 bottom-0 w-1.5 bg-slate-200 dark:bg-slate-800 -translate-x-1/2 rounded-full"></div>
+          <div className="absolute left-10 md:left-1/2 top-10 bottom-10 w-px bg-[var(--border-color)] -translate-x-1/2"></div>
           
           <motion.div 
-            className="absolute left-8 md:left-1/2 top-0 w-1.5 bg-gradient-to-b from-primary-500 to-indigo-500 -translate-x-1/2 rounded-full origin-top"
+            className="absolute left-10 md:left-1/2 top-10 w-px bg-[var(--text-main)] -translate-x-1/2 origin-top"
             initial={{ scaleY: 0 }}
             animate={{ scaleY: currentLevelId === 'completed' ? 1 : currentLevelId === 'advanced' ? 0.8 : currentLevelId === 'intermediate' ? 0.5 : 0.2 }}
             transition={{ duration: 1.5, ease: "easeInOut" }}
@@ -252,38 +256,41 @@ export default function KnowledgeMapPage() {
               let stateClass = '';
               let iconBg = '';
               let iconColor = '';
+              let titleColor = '';
               
               if (level.completed) {
-                stateClass = 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.15)] hover:shadow-[0_0_40px_rgba(16,185,129,0.25)] hover:-translate-y-1';
-                iconBg = 'bg-emerald-500';
-                iconColor = 'text-white';
+                stateClass = 'border-[var(--text-main)] opacity-70';
+                iconBg = 'bg-[var(--bg-surface)] border-[var(--text-main)]';
+                iconColor = 'text-[var(--text-main)]';
+                titleColor = 'text-[var(--text-main)]';
               } else if (isCurrent) {
-                stateClass = 'border-primary-500 bg-primary-50 dark:bg-primary-500/10 shadow-[0_0_40px_rgba(99,102,241,0.25)] scale-[1.02] hover:scale-[1.04] hover:shadow-[0_0_50px_rgba(99,102,241,0.35)] relative overflow-hidden group';
-                iconBg = 'bg-primary-500 shadow-[0_0_20px_rgba(99,102,241,0.6)]';
-                iconColor = 'text-white';
+                stateClass = 'border-[var(--text-main)] bg-[var(--bg-main)]';
+                iconBg = 'bg-[var(--text-main)] border-[var(--text-main)]';
+                iconColor = 'text-[var(--bg-main)]';
+                titleColor = 'text-[var(--text-main)]';
               } else {
-                stateClass = 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 opacity-60 hover:opacity-100 hover:-translate-y-1 hover:shadow-lg';
-                iconBg = 'bg-slate-200 dark:bg-slate-800';
-                iconColor = 'text-slate-400';
+                stateClass = 'border-[var(--border-color)] bg-[var(--bg-surface)] opacity-50';
+                iconBg = 'bg-[var(--bg-surface)] border-[var(--border-color)]';
+                iconColor = 'text-[var(--text-muted)]';
+                titleColor = 'text-[var(--text-muted)]';
               }
 
               return (
                 <motion.div 
                   key={level.id} 
-                  initial={{ opacity: 0, y: 50 }}
+                  initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.6, delay: index * 0.2 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
                   className={`relative w-full flex ${isEven ? 'md:justify-start' : 'md:justify-end'}`}
                 >
-                  <div className={`absolute left-8 md:left-1/2 -translate-x-1/2 w-14 h-14 rounded-full flex items-center justify-center border-4 border-slate-50 dark:border-slate-950 z-20 ${iconBg} ${iconColor} transition-all duration-500`}>
-                    {level.completed ? <Check size={24} strokeWidth={3} /> : isCurrent ? <Flag size={24} strokeWidth={3} className="animate-pulse" /> : <Lock size={20} />}
+                  <div className={`absolute left-10 md:left-1/2 -translate-x-1/2 w-8 h-8 rounded flex items-center justify-center border z-20 ${iconBg} ${iconColor} transition-colors duration-300`}>
+                    {level.completed ? <Check size={16} strokeWidth={2} /> : isCurrent ? <Flag size={16} strokeWidth={2} /> : <Lock size={14} />}
                   </div>
 
-                  <div className={`w-full pl-24 md:pl-0 md:w-[calc(50%-4rem)] ${isEven ? 'md:pr-12 md:text-right' : 'md:pl-12 md:text-left'}`}>
-                    <div className={`p-6 sm:p-8 rounded-[2rem] border-2 backdrop-blur-md transition-all duration-500 ${stateClass}`}>
-                      {isCurrent && <div className="absolute inset-0 bg-gradient-to-r from-primary-500/0 via-primary-500/10 to-primary-500/0 -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none"></div>}
-                      <h2 className={`relative z-10 text-2xl font-bold mb-4 ${level.completed ? 'text-emerald-700 dark:text-emerald-400' : isCurrent ? 'text-primary-700 dark:text-primary-400' : 'text-slate-700 dark:text-slate-400'}`}>
+                  <div className={`w-full pl-20 md:pl-0 md:w-[calc(50%-2rem)] ${isEven ? 'md:pr-8 md:text-right' : 'md:pl-8 md:text-left'}`}>
+                    <div className={`p-6 rounded border transition-all duration-300 ${stateClass}`}>
+                      <h2 className={`relative z-10 text-lg font-semibold mb-3 tracking-tight ${titleColor}`}>
                         {level.label}
                       </h2>
                       
@@ -292,10 +299,10 @@ export default function KnowledgeMapPage() {
                           {levelConcepts.map((c: any) => (
                             <div 
                               key={c.id} 
-                              className={`px-4 py-2 rounded-xl text-sm font-semibold border ${
-                                level.completed ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30' :
-                                isCurrent ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 shadow-sm' :
-                                'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'
+                              className={`px-3 py-1.5 rounded text-[13px] font-medium border ${
+                                level.completed ? 'bg-[var(--bg-main)] text-[var(--text-main)] border-[var(--border-color)]' :
+                                isCurrent ? 'bg-[var(--bg-surface)] text-[var(--text-main)] border-[var(--border-color)]' :
+                                'bg-[var(--bg-main)] text-[var(--text-muted)] border-[var(--border-color)]'
                               }`}
                             >
                               {c.name}
@@ -303,7 +310,7 @@ export default function KnowledgeMapPage() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-slate-400 dark:text-slate-500 font-medium">Chưa có bài học chi tiết</p>
+                        <p className="text-[13px] text-[var(--text-muted)] font-medium">{t('map.no_lessons')}</p>
                       )}
                     </div>
                   </div>
@@ -313,7 +320,7 @@ export default function KnowledgeMapPage() {
           </div>
         </div>
       ) : (
-        <div className="w-full h-[65vh] bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-slate-200 dark:border-slate-800 shadow-inner overflow-hidden relative">
+        <div className="w-full h-[65vh] bg-[var(--bg-surface)] rounded border border-[var(--border-color)] relative">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -323,18 +330,18 @@ export default function KnowledgeMapPage() {
             fitView
             attributionPosition="bottom-left"
           >
-            <Background variant={BackgroundVariant.Dots} gap={24} size={2} color="#94a3b8" />
-            <Controls />
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--border-color)" />
+            <Controls className="!bg-[var(--bg-main)] !border-[var(--border-color)] !shadow-none" />
             <MiniMap 
-              nodeColor={(node) => {
-                return node.style?.background as string || '#eee'
-              }}
-              maskColor="rgba(0,0,0,0.1)"
+              nodeColor={() => 'var(--text-muted)'}
+              maskColor="var(--bg-surface)"
+              className="!bg-[var(--bg-main)] !border-[var(--border-color)] !shadow-none"
             />
           </ReactFlow>
         </div>
       )}
       </div>
+      <ChatWidget documentId={id || ''} />
     </motion.div>
   )
 }

@@ -9,8 +9,8 @@
     --bg-main: #FAFAFA;       /* Warm paper white */
     --bg-surface: #FFFFFF;    /* Pure white for panels */
     --text-main: #171717;     /* Near black */
-    --text-muted: #737373;    /* Neutral gray */
-    --border-color: #E5E5E5;  /* Subtle border */
+    --text-muted: #525252;    /* Darker neutral gray - better contrast on light bg */
+    --border-color: #D4D4D4;  /* Slightly darker border for visibility */
     --accent: #E57B3E;        /* Muted amber */
   }
   

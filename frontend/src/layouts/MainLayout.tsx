@@ -150,6 +150,9 @@ export default function MainLayout() {
                 <NavLink id="nav-admin-users" to="/app/admin/users" className={navItemClass}>
                   <span>{t('nav.admin_users')}</span>
                 </NavLink>
+                <NavLink id="nav-admin-ai-models" to="/app/admin/ai-models" className={navItemClass}>
+                  <span>{t('nav.admin_ai_models')}</span>
+                </NavLink>
                 <NavLink id="nav-admin-settings" to="/app/admin/settings" className={navItemClass}>
                   <span>{t('nav.admin_settings')}</span>
                 </NavLink>

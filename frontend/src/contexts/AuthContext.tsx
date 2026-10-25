@@ -24,6 +24,7 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
+  loginWithGoogle: (credential: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
   /** Apply usage numbers returned by AI endpoints so the token bar updates instantly. */
@@ -50,6 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const res = await axios.get('/api/auth/me')
           setUser(res.data.user)
+          // Auto-save renewed token if backend issued a fresh one
+          if (res.data.token) {
+            localStorage.setItem('token', res.data.token)
+            axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`
+          }
         } catch (error) {
           console.error('Lỗi xác thực token:', error)
           localStorage.removeItem('token')
@@ -77,11 +83,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }
 
+  const loginWithGoogle = async (credential: string) => {
+    const res = await axios.post('/api/auth/google', { credential })
+    const { token, user } = res.data
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(user)
+  }
+
   const refreshUser = useCallback(async () => {
     if (!localStorage.getItem('token')) return
     try {
       const res = await axios.get('/api/auth/me')
       setUser(res.data.user)
+      // Auto-save renewed token
+      if (res.data.token) {
+        localStorage.setItem('token', res.data.token)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`
+      }
     } catch (e) {
       console.error(e)
     }
@@ -100,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, applyUsage }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, refreshUser, applyUsage }}>
       {children}
     </AuthContext.Provider>
   )

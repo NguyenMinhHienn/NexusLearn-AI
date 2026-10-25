@@ -8,17 +8,27 @@ const CODE_TO_KEY: Record<string, string> = {
   EMPTY_TEXT: 'errors.empty_text',
   YOUTUBE_NO_TRANSCRIPT: 'errors.youtube_no_transcript',
   NOT_READY: 'errors.not_ready',
+  MESSAGE_TOO_LONG: 'errors.message_too_long',
+  INVALID_EMAIL: 'errors.invalid_email',
+  PASSWORD_TOO_SHORT: 'errors.password_too_short',
 }
 
 /** True when the backend rejected the request because the AI quota is used up. */
 export const isQuotaError = (err: any) =>
   err?.response?.status === 403 && (err?.response?.data?.quota_exceeded || err?.response?.data?.code === 'QUOTA_EXCEEDED')
 
+/** True when the backend returns 429 Too Many Requests (rate limited). */
+export const isRateLimitError = (err: any) => err?.response?.status === 429
+
 /**
  * Turn an axios error into a user-facing, translated message.
  * Known error codes are translated; otherwise the server message (or a fallback) is used.
  */
 export function getApiErrorMessage(err: any, t: TFunction, fallbackKey = 'common.generic_error'): string {
+  // Rate limit (429)
+  if (isRateLimitError(err)) {
+    return err?.response?.data?.message || t('errors.rate_limited')
+  }
   if (isQuotaError(err)) {
     const { estimated, remaining } = err?.response?.data || {}
     if (typeof estimated === 'number' && estimated > 0) {

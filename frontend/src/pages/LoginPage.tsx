@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Loader2, ArrowRight } from 'lucide-react'
+import { Loader2, ArrowRight, Sun, Moon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTheme } from '../contexts/ThemeContext'
 
 const fadeUp: any = {
   hidden: { opacity: 0, y: 15 },
@@ -18,13 +19,61 @@ const quoteKeys = ['auth.quote_1', 'auth.quote_2', 'auth.quote_3']
 
 export default function LoginPage() {
   const { t } = useTranslation()
+  const { theme, setTheme } = useTheme()
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [quoteIndex, setQuoteIndex] = useState(0)
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  const GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || ''
+
+  // Load Google Identity Services script
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => {
+      (window as any).google?.accounts?.id?.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCallback,
+      })
+      const btnEl = document.getElementById('google-signin-btn-login')
+      if (btnEl) {
+        (window as any).google?.accounts?.id?.renderButton(btnEl, {
+          theme: isDark ? 'filled_black' : 'outline',
+          size: 'large',
+          width: btnEl.offsetWidth,
+          text: 'signin_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+        })
+      }
+    }
+    document.body.appendChild(script)
+    return () => { document.body.removeChild(script) }
+  }, [GOOGLE_CLIENT_ID, isDark])
+
+  const handleGoogleCallback = async (response: any) => {
+    if (!response?.credential) return
+    setGoogleLoading(true)
+    setError('')
+    try {
+      await loginWithGoogle(response.credential)
+      navigate('/app')
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Google login failed')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -81,7 +130,15 @@ export default function LoginPage() {
       </div>
 
       {/* Right Side - Form */}
-      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-24">
+      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-24 relative">
+        {/* Theme Toggle - top right */}
+        <button
+          onClick={toggleTheme}
+          className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-md border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-muted)] transition-all duration-200 z-10"
+          aria-label="Toggle theme"
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
         {/* Mobile Header */}
         <div className="md:hidden flex justify-center mb-10">
           <Link to="/" className="flex items-center gap-3 group">
@@ -160,7 +217,25 @@ export default function LoginPage() {
             </motion.div>
           </form>
 
-          <motion.div custom={6} variants={fadeUp} className="mt-8 text-center text-sm">
+          {/* Google Sign-In */}
+          {GOOGLE_CLIENT_ID && (
+            <motion.div custom={6} variants={fadeUp} className="mt-6">
+              <div className="relative flex items-center py-3">
+                <div className="flex-grow border-t border-[var(--border-color)]" />
+                <span className="flex-shrink-0 mx-4 text-xs text-[var(--text-muted)]">{t('auth.or_continue_with')}</span>
+                <div className="flex-grow border-t border-[var(--border-color)]" />
+              </div>
+              {googleLoading ? (
+                <div className="w-full flex justify-center items-center py-3">
+                  <Loader2 size={20} className="animate-spin text-[var(--text-muted)]" />
+                </div>
+              ) : (
+                <div id="google-signin-btn-login" className="w-full flex justify-center" />
+              )}
+            </motion.div>
+          )}
+
+          <motion.div custom={7} variants={fadeUp} className="mt-8 text-center text-sm">
             <span className="text-[var(--text-muted)]">{t('auth.no_account')} </span>
             <Link to="/register" className="font-medium text-[var(--text-main)] hover:underline">
               {t('auth.register_now')}

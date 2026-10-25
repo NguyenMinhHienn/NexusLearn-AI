@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai';
 import { jsonrepair } from 'jsonrepair';
 import pool from '../config/db';
-import { ResultSetHeader } from 'mysql2';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { addTokenUsage } from './quotaService';
 import dotenv from 'dotenv';
 
@@ -9,6 +9,39 @@ dotenv.config();
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
+
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+
+/**
+ * Read the active AI model from system_settings.
+ * Cached for 60s so we don't hit the DB on every single AI call.
+ */
+let _modelCache: { name: string; ts: number } | null = null;
+const MODEL_CACHE_TTL = 60_000; // 60 seconds
+
+export async function getActiveModel(): Promise<string> {
+  if (_modelCache && Date.now() - _modelCache.ts < MODEL_CACHE_TTL) {
+    return _modelCache.name;
+  }
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT setting_value FROM system_settings WHERE setting_key = 'ai_model'"
+    );
+    const name = rows[0]?.setting_value || DEFAULT_MODEL;
+    _modelCache = { name, ts: Date.now() };
+    return name;
+  } catch {
+    return _modelCache?.name || DEFAULT_MODEL;
+  }
+}
+
+/** Clear the model cache (called when admin changes the model). */
+export function clearModelCache() {
+  _modelCache = null;
+}
+
+/** Expose the API key status and genAI instance for admin routes. */
+export { apiKey, genAI };
 
 export type AiLang = 'vi' | 'en';
 
@@ -95,8 +128,10 @@ export const geminiAnalyzeDocument = async (documentId: number, documentText: st
       required: ["concepts", "relationships", "quiz"]
     };
 
+    const activeModelName = await getActiveModel();
+
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: activeModelName,
       systemInstruction: "Bạn là một trợ lý giáo dục tạo khóa học E-learning chuyên nghiệp. Hãy phân tích tài liệu đầu vào một cách thật chi tiết, sâu sắc, và toàn diện. Chia kiến thức thành 3 chặng (Nền tảng, Nâng cao, Chuyên sâu). Mỗi chặng cần có nội dung giảng giải cặn kẽ, ví dụ minh họa rõ ràng để người học dễ hiểu nhất. Đừng tóm tắt quá sơ sài.",
       generationConfig: {
         responseMimeType: "application/json",
@@ -212,8 +247,10 @@ ${truncatedText}
 export const geminiChatWithDocument = async (documentContext: string, userMessage: string, chatHistory: { role: string, text: string }[] = [], lang: AiLang = 'vi') => {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
   
+  const activeModelName = await getActiveModel();
+  
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: activeModelName,
     systemInstruction: `Bạn là Gia Sư Ảo AI (Virtual Tutor) chuyên nghiệp của ứng dụng NexusLearn.
 Nhiệm vụ của bạn:
 1. Giải đáp thắc mắc của học sinh chủ yếu dựa trên TÀI LIỆU được cung cấp bên dưới.
@@ -253,8 +290,10 @@ export const geminiGenerateFlashcards = async (documentContext: string, lang: Ai
     }
   };
 
+  const activeModelName = await getActiveModel();
+
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: activeModelName,
     systemInstruction: "Bạn là chuyên gia giáo dục. Nhiệm vụ của bạn là đọc toàn bộ nội dung tài liệu và trích xuất ra 10-15 THUẬT NGỮ (hoặc khái niệm cốt lõi) quan trọng nhất kèm theo ĐỊNH NGHĨA ngắn gọn, dễ hiểu để làm bộ thẻ ghi nhớ (Flashcards). Trả về mảng JSON chuẩn." + langDirective(lang),
     generationConfig: {
       responseMimeType: "application/json",
@@ -279,8 +318,9 @@ export const geminiGenerateFlashcards = async (documentContext: string, lang: Ai
 
 export const geminiGlobalChat = async (message: string, history: { role: 'user' | 'model', text: string }[], lang: AiLang = 'vi') => {
   try {
+    const activeModelName = await getActiveModel();
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: activeModelName,
       systemInstruction: `Bạn là Trợ lý ảo AI của NexusLearn - một nền tảng E-learning tiên tiến.
 Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và lịch sự.${langDirective(lang)}`,
       generationConfig: NO_THINKING,
@@ -313,8 +353,9 @@ export const geminiReviewChat = async (
       `=== TÀI LIỆU: "${d.title}" ===\n${d.content}`
     ).join('\n\n');
 
+    const activeModelName = await getActiveModel();
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: activeModelName,
       systemInstruction: `Bạn là Gia Sư Ôn Tập Thông Minh (Smart Review Tutor) của NexusLearn.
 
 NGUYÊN TẮC BẮT BUỘC:

@@ -70,6 +70,7 @@ function AnimatedRoutes() {
             <Route path="/app/admin" element={<ProtectedRoute requireAdmin={true}><MainLayout /></ProtectedRoute>}>
               <Route index element={<AdminDashboard />} />
               <Route path="users" element={<AdminDashboard />} />
+              <Route path="ai-models" element={<AdminDashboard />} />
               <Route path="settings" element={<AdminDashboard />} />
             </Route>
           </Routes>

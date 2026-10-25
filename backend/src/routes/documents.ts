@@ -25,6 +25,8 @@ import {
   QuotaCheck,
 } from '../services/quotaService';
 import { logActivity } from '../services/schemaService';
+import { uploadLimiter, chatLimiter, flashcardLimiter } from '../middleware/rateLimiter';
+import { sanitizeChatInput, sanitizeDocumentInput } from '../middleware/validation';
 
 const router = Router();
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -63,7 +65,7 @@ async function usagePayload(userId: number) {
 // ---------------------------------------------------------------------------
 // Upload
 // ---------------------------------------------------------------------------
-router.post('/upload', authenticateToken, (req: AuthRequest, res: Response, next) => {
+router.post('/upload', authenticateToken, uploadLimiter, sanitizeDocumentInput, (req: AuthRequest, res: Response, next) => {
   upload.single('file')(req, res, (err: any) => {
     if (err?.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: 'File vượt quá 10MB. Vui lòng chọn file nhỏ hơn.', code: 'FILE_TOO_LARGE' });
@@ -295,7 +297,7 @@ router.get('/stats/summary', authenticateToken, async (req: AuthRequest, res: Re
 // Smart Review Room - chat with multiple documents
 // (declared before "/:id" routes for clarity)
 // ---------------------------------------------------------------------------
-router.post('/review-chat', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/review-chat', authenticateToken, chatLimiter, sanitizeChatInput, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -436,7 +438,7 @@ router.post('/:id/quiz/attempt', authenticateToken, async (req: AuthRequest, res
   }
 });
 
-router.post('/:id/chat', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:id/chat', authenticateToken, chatLimiter, sanitizeChatInput, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     const userId = req.user?.id;
@@ -468,7 +470,7 @@ router.post('/:id/chat', authenticateToken, async (req: AuthRequest, res: Respon
   }
 });
 
-router.post('/:id/flashcards/generate', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:id/flashcards/generate', authenticateToken, flashcardLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const docId = req.params.id;
     const userId = req.user?.id;

@@ -1,10 +1,12 @@
 import express, { Response } from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { geminiGlobalChat, resolveAiLang } from '../services/geminiAiService';
+import { globalChatLimiter } from '../middleware/rateLimiter';
+import { sanitizeChatInput } from '../middleware/validation';
 
 const router = express.Router();
 
-router.post('/global', async (req, res) => {
+router.post('/global', globalChatLimiter, sanitizeChatInput, async (req, res) => {
   try {
     const { message, history } = req.body;
 
@@ -25,3 +27,4 @@ router.post('/global', async (req, res) => {
 });
 
 export default router;
+

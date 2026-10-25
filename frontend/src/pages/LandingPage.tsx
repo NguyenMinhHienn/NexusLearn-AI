@@ -1,11 +1,24 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Sparkles, Network, BookOpenCheck, LineChart } from 'lucide-react'
+import { ArrowRight, Sparkles, Network, BookOpenCheck, LineChart, Sun, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useTranslation } from 'react-i18next'
+import { useTheme } from '../contexts/ThemeContext'
 
 export default function LandingPage() {
   const { t } = useTranslation()
+  const { theme, setTheme } = useTheme()
+
+  // Resolve the actual displayed theme (for the icon)
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  const toggleTheme = () => {
+    if (isDark) {
+      setTheme('light')
+    } else {
+      setTheme('dark')
+    }
+  }
 
   const fadeUpVariants: any = {
     hidden: { opacity: 0, y: 30 },
@@ -41,8 +54,17 @@ export default function LandingPage() {
             </div>
             <span className="font-heading font-semibold text-lg tracking-tight">NexusLearn</span>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
             <LanguageSwitcher />
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="w-9 h-9 flex items-center justify-center rounded-md border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-muted)] transition-all duration-200"
+              aria-label="Toggle theme"
+              title={isDark ? 'Light mode' : 'Dark mode'}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <Link to="/login" className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors hidden sm:block">
               {t('landing.login')}
             </Link>

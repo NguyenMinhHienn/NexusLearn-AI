@@ -15,8 +15,10 @@ const MAX_SIZE = 10 * 1024 * 1024
 // Mirrors the backend estimator (quotaService): overhead + ~3 chars/token of the first 30k chars + output reserve
 const MAX_ANALYZE_CHARS = 30000
 const estimateAnalyzeTokens = (chars: number) => 600 + Math.ceil(Math.min(chars, MAX_ANALYZE_CHARS) / 3) + 3500
+import { usePageTitle } from '../utils/usePageTitle'
 
 export default function UploadPage() {
+  usePageTitle('upload')
   const { user, refreshUser } = useAuth()
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<Tab>('file')

@@ -26,8 +26,10 @@ interface Doc {
 }
 
 const progressOf = (d: Doc) => Math.round((Math.min(Number(d.completed_levels) || 0, 3) / 3) * 100)
+import { usePageTitle } from '../utils/usePageTitle'
 
 export default function DocumentsPage() {
+  usePageTitle('documents')
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [docs, setDocs] = useState<Doc[]>([])

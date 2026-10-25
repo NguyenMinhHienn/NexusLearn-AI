@@ -491,5 +491,21 @@
     "feature_1": "Bản đồ tư duy tự động.",
     "feature_2": "Flashcard thông minh bám sát tài liệu.",
     "feature_3": "Gia sư AI cá nhân hóa 24/7."
+  },
+  "page_title": {
+    "login": "Đăng nhập",
+    "register": "Đăng ký",
+    "dashboard": "Bảng điều khiển",
+    "upload": "Tải tài liệu",
+    "documents": "Tài liệu",
+    "document": "Chi tiết tài liệu",
+    "knowledge_map": "Sơ đồ tư duy",
+    "quiz": "Kiểm tra",
+    "flashcards": "Flashcards",
+    "review": "Phòng ôn tập",
+    "admin": "Quản trị hệ thống",
+    "admin_users": "Quản lý người dùng",
+    "admin_models": "Quản lý AI Models",
+    "admin_settings": "Cài đặt hệ thống"
   }
 }

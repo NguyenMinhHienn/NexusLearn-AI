@@ -12,8 +12,10 @@ const progressOf = (d: any) => Math.round((Math.min(Number(d?.completed_levels) 
 
 /** Bucket a raw activity count into 0-4 intensity levels. */
 const intensity = (count: number) => (count <= 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4)
+import { usePageTitle } from '../utils/usePageTitle'
 
 export default function DashboardPage() {
+  usePageTitle('dashboard')
   const { user } = useAuth()
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)

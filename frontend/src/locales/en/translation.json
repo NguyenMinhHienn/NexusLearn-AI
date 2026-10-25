@@ -491,5 +491,21 @@
     "feature_1": "Automatic mind maps.",
     "feature_2": "Smart flashcards that follow your documents.",
     "feature_3": "A personal AI tutor, 24/7."
+  },
+  "page_title": {
+    "login": "Sign In",
+    "register": "Sign Up",
+    "dashboard": "Dashboard",
+    "upload": "Upload Document",
+    "documents": "Documents",
+    "document": "Document Details",
+    "knowledge_map": "Knowledge Map",
+    "quiz": "Quiz",
+    "flashcards": "Flashcards",
+    "review": "Review Room",
+    "admin": "Admin Dashboard",
+    "admin_users": "User Management",
+    "admin_models": "AI Model Management",
+    "admin_settings": "System Settings"
   }
 }

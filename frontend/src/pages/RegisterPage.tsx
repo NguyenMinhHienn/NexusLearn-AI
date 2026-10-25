@@ -16,8 +16,10 @@ const fadeUp: any = {
 }
 
 const features = ['auth.feature_1', 'auth.feature_2', 'auth.feature_3']
+import { usePageTitle } from '../utils/usePageTitle'
 
 export default function RegisterPage() {
+  usePageTitle('register')
   const { t } = useTranslation()
   const { theme, setTheme } = useTheme()
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)

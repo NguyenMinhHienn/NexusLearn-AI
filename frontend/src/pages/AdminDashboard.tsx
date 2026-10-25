@@ -15,8 +15,10 @@ const NUMERIC_SETTINGS = ['default_token_quota', 'quota_reset_period']
 
 const fadeIn = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } } }
 const stagger = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }
+import { usePageTitle } from '../utils/usePageTitle'
 
 export default function AdminDashboard() {
+  usePageTitle('admin')
   const { user, refreshUser } = useAuth()
   const { t, i18n } = useTranslation()
   const location = useLocation()

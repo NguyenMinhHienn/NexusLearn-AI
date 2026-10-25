@@ -7,19 +7,19 @@ import rateLimit from 'express-rate-limit';
  * Khi vượt ngưỡng, server trả về HTTP 429 (Too Many Requests).
  */
 
-/** Giới hạn tổng cho toàn bộ API: 100 req / phút / IP */
+/** Giới hạn tổng cho toàn bộ API: 300 req / phút / IP */
 export const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
 });
 
-/** Auth routes (login/register): 5 req / 15 phút / IP — chống brute-force */
+/** Auth routes (login/register): 20 req / 15 phút / IP — chống brute-force */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Quá nhiều lần thử đăng nhập. Vui lòng đợi 15 phút.' },

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, X, Clock, Check, Sparkles, Mail } from 'lucide-react'
+import { Zap, X, Clock, Check, Sparkles, CreditCard } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { currentLocale } from '../i18n'
@@ -13,15 +14,9 @@ interface QuotaDetail {
   action?: 'analyze' | 'chat' | 'flashcards'
 }
 
-const SUPPORT_EMAIL = (import.meta as any).env?.VITE_SUPPORT_EMAIL || 'admin@studymate.com'
-
-/**
- * Global "not enough AI tokens" dialog.
- * Registers an axios interceptor so every QUOTA_EXCEEDED response (upload, chat, flashcards...)
- * opens the same explanation + upgrade prompt, wherever it happened.
- */
 export default function QuotaModal() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
   const [detail, setDetail] = useState<QuotaDetail | null>(null)
   const locale = currentLocale()
@@ -135,12 +130,16 @@ export default function QuotaModal() {
                   </div>
                   <p className="text-xs text-[var(--text-muted)]">{t('quota_modal.plan_free_desc', { quota: fmt(freeQuota) })}</p>
                 </div>
-                <div className="rounded border-2 border-[var(--text-main)] p-3 relative">
+                <div className="rounded-xl border-2 border-[var(--accent)] bg-[var(--accent-soft)]/30 p-3 relative">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-semibold text-[var(--text-main)] flex items-center gap-1"><Sparkles size={13} /> Pro</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--text-main)] text-[var(--bg-main)]">{t('quota_modal.coming_soon')}</span>
+                    <span className="text-sm font-semibold text-[var(--text-main)] flex items-center gap-1">
+                      <Sparkles size={13} className="text-[var(--accent)]" /> Scholar Pro
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-white">
+                      $9/mo
+                    </span>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)]">{t('quota_modal.plan_pro_desc')}</p>
+                  <p className="text-xs text-[var(--text-muted)]">300,000 AI Tokens / day · Stripe + MCP</p>
                 </div>
               </div>
               <ul className="mt-3 space-y-1">
@@ -150,21 +149,28 @@ export default function QuotaModal() {
                   </li>
                 ))}
               </ul>
+              <p className="mt-3 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[11px] text-[var(--text-muted)] leading-relaxed">
+                <strong className="text-amber-500">CV Demo:</strong> {t('billing.cv_disclaimer_short')}
+              </p>
             </div>
 
             <div className="px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-main)] flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
               <button
                 onClick={() => setDetail(null)}
-                className="px-4 py-2 rounded text-sm font-medium border border-[var(--border-color)] text-[var(--text-main)] hover:border-[var(--text-muted)] transition-colors"
+                className="px-4 py-2 rounded-xl text-sm font-medium border border-[var(--border-color)] text-[var(--text-main)] hover:border-[var(--text-muted)] transition-colors"
               >
                 {t('quota_modal.got_it')}
               </button>
-              <a
-                href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t('quota_modal.mail_subject'))}&body=${encodeURIComponent(t('quota_modal.mail_body', { email: user?.email || '' }))}`}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-medium bg-[var(--text-main)] text-[var(--bg-main)] hover:opacity-90 transition-opacity"
+              <button
+                type="button"
+                onClick={() => {
+                  setDetail(null)
+                  navigate('/app/billing')
+                }}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-[var(--accent)] to-amber-600 text-white hover:brightness-105 transition-all"
               >
-                <Mail size={14} /> {t('quota_modal.upgrade')}
-              </a>
+                <CreditCard size={14} /> {t('billing.upgrade_btn')}
+              </button>
             </div>
           </motion.div>
         </div>

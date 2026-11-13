@@ -5,6 +5,13 @@ export interface UserQuotaData {
   id: number;
   email: string;
   name: string;
+  avatar_url?: string | null;
+  occupation?: string | null;
+  learning_goal?: string | null;
+  plan_tier?: string;
+  plan_expires_at?: string | null;
+  stripe_subscription_id?: string | null;
+  created_at?: string;
   role: string;
   token_quota: number;
   tokens_used: number;
@@ -61,6 +68,14 @@ export async function resetExpiredQuotas(): Promise<number> {
 export async function syncUserQuota(userId: number): Promise<UserQuotaData | null> {
   const periodHours = await getResetPeriodHours();
 
+  // Auto-downgrade canceled subscriptions that have passed their billing period end
+  await pool.query(
+    `UPDATE users
+     SET plan_tier = 'free', token_quota = 15000, stripe_subscription_id = NULL, plan_expires_at = NULL
+     WHERE id = ? AND plan_tier <> 'free' AND plan_expires_at IS NOT NULL AND plan_expires_at < NOW()`,
+    [userId]
+  );
+
   if (periodHours > 0) {
     await pool.query(
       `UPDATE users SET tokens_used = 0, last_quota_reset = NOW() WHERE id = ? AND ${buildResetCondition(periodHours)}`,
@@ -75,7 +90,8 @@ export async function syncUserQuota(userId: number): Promise<UserQuotaData | nul
       : 'NULL';
 
   const [users] = await pool.query<RowDataPacket[]>(
-    `SELECT id, email, name, role, token_quota, tokens_used, last_quota_reset,
+    `SELECT id, email, name, avatar_url, occupation, learning_goal, plan_tier, plan_expires_at, stripe_subscription_id,
+            created_at, role, token_quota, tokens_used, last_quota_reset,
             ${nextResetExpr} AS next_quota_reset
      FROM users WHERE id = ?`,
     [userId]

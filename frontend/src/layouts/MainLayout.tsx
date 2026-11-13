@@ -176,6 +176,12 @@ export default function MainLayout() {
                 <NavLink id="nav-review" to="/app/review" className={navItemClass}>
                   <span>{t('nav.review')}</span>
                 </NavLink>
+                <NavLink id="nav-billing" to="/app/billing" className={navItemClass}>
+                  <span className="flex-1">{t('billing.nav_label')}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] text-[10px] font-mono font-bold">
+                    {user?.plan_tier === 'unlimited' ? 'MAX' : 'PRO'}
+                  </span>
+                </NavLink>
               </div>
 
               {/* Recent Documents */}
@@ -254,11 +260,27 @@ export default function MainLayout() {
               className="w-full flex items-center justify-between p-2 rounded transition-colors hover:bg-[var(--border-color)]"
             >
               <div className="flex items-center gap-3 overflow-hidden">
-                <div className="w-8 h-8 rounded bg-[var(--text-main)] flex items-center justify-center text-[var(--bg-main)] flex-shrink-0">
-                  <User size={14} />
-                </div>
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.name}
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 rounded object-cover border border-[var(--border-color)] flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded bg-[var(--text-main)] flex items-center justify-center text-[var(--bg-main)] flex-shrink-0">
+                    <User size={14} />
+                  </div>
+                )}
                 <div className="flex flex-col min-w-0 text-left">
-                  <span className="text-sm font-medium text-[var(--text-main)] truncate">{user?.name}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm font-medium text-[var(--text-main)] truncate">{user?.name}</span>
+                    {user?.plan_tier && user.plan_tier !== 'free' && (
+                      <span className="px-1.5 py-0.2 rounded bg-[var(--accent-soft)] text-[var(--accent)] text-[9px] font-mono font-bold uppercase shrink-0">
+                        {user.plan_tier === 'unlimited' ? 'MAX' : 'PRO'}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-[var(--text-muted)] truncate">{user?.role === 'admin' ? 'Admin' : user?.email}</span>
                 </div>
               </div>

@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(100) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL,
+  avatar_url VARCHAR(500) NULL,
+  occupation VARCHAR(60) NULL,
+  learning_goal VARCHAR(150) NULL,
+  plan_tier VARCHAR(20) NOT NULL DEFAULT 'free',
+  stripe_customer_id VARCHAR(100) NULL,
+  stripe_subscription_id VARCHAR(100) NULL,
+  plan_expires_at TIMESTAMP NULL,
   role ENUM('user', 'admin') DEFAULT 'user',
   token_quota INT DEFAULT 15000,
   tokens_used INT DEFAULT 0,
@@ -107,5 +114,22 @@ CREATE TABLE IF NOT EXISTS user_activity (
   total INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_user_activity_user_date (user_id, created_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Bảng Giao dịch & Thuê bao (Idempotent Stripe + MCP Billing Ledger)
+CREATE TABLE IF NOT EXISTS payment_transactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  stripe_session_id VARCHAR(120) UNIQUE NOT NULL,
+  stripe_payment_intent VARCHAR(120) NULL,
+  plan_id VARCHAR(30) NOT NULL,
+  billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
+  amount_cents INT NOT NULL,
+  currency VARCHAR(10) NOT NULL DEFAULT 'usd',
+  status VARCHAR(30) NOT NULL DEFAULT 'paid',
+  source VARCHAR(30) NOT NULL DEFAULT 'stripe',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_payment_user_created (user_id, created_at),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

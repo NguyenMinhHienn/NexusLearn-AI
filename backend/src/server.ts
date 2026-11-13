@@ -8,6 +8,7 @@ import authRoutes from './routes/auth';
 import documentRoutes from './routes/documents';
 import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
+import billingRoutes, { stripeWebhookHandler } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
 import { ensureSchema } from './services/schemaService';
 import { resetExpiredQuotas } from './services/quotaService';
@@ -41,11 +42,15 @@ app.use(cors({
 // Rate Limiter toàn cục: 100 request / phút / IP
 app.use('/api', globalLimiter);
 
+// Stripe Signed Webhook MUST receive raw payload buffer before express.json()
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
+
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
 app.use('/api/chat', chatRoutes);

@@ -5,12 +5,22 @@ export interface User {
   id: number
   email: string
   name: string
-  avatar_url?: string
+  avatar_url?: string | null
+  occupation?: string | null
+  learning_goal?: string | null
+  plan_tier?: 'free' | 'pro' | 'unlimited'
+  plan_expires_at?: string | null
+  created_at?: string
   role: 'user' | 'admin'
   token_quota: number
   tokens_used: number
   next_quota_reset?: string | null
   quota_reset_period?: number
+}
+
+export interface RegisterProfileMeta {
+  occupation?: string
+  learning_goal?: string
 }
 
 export interface UsageUpdate {
@@ -23,7 +33,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string, meta?: RegisterProfileMeta) => Promise<void>
   loginWithGoogle: (credential: string) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -75,12 +85,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }
 
-  const register = async (name: string, email: string, password: string) => {
-    const res = await axios.post('/api/auth/register', { name, email, password })
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    meta?: RegisterProfileMeta
+  ) => {
+    const res = await axios.post('/api/auth/register', {
+      name,
+      email,
+      password,
+      occupation: meta?.occupation,
+      learning_goal: meta?.learning_goal,
+    })
     const { token, user } = res.data
     localStorage.setItem('token', token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    setUser(user)
+    setUser({
+      ...user,
+      occupation: user?.occupation ?? meta?.occupation ?? null,
+      learning_goal: user?.learning_goal ?? meta?.learning_goal ?? null,
+    })
   }
 
   const loginWithGoogle = async (credential: string) => {

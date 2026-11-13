@@ -5,40 +5,47 @@ import pool from '../config/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { syncUserQuota } from '../services/quotaService';
+import { ensureSchema } from '../services/schemaService';
 import { authLimiter } from '../middleware/rateLimiter';
-import { validateAuthInput } from '../middleware/validation';
+import { validateAuthInput, stripHtml } from '../middleware/validation';
 import { OAuth2Client } from 'google-auth-library';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'nexuslearn_super_secret_key_2026';
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+const googleClient = new OAuth2Client();
+
+router.use(async (_req, _res, next) => {
+  await ensureSchema();
+  next();
+});
 
 // ---------------------------------------------------------------------------
 // Google OAuth Sign-In
 // ---------------------------------------------------------------------------
 router.post('/google', authLimiter, async (req: Request, res: Response) => {
   try {
+    const googleClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
     const { credential } = req.body;
     if (!credential) {
       return res.status(400).json({ message: 'Missing Google credential' });
     }
-    if (!GOOGLE_CLIENT_ID) {
+    if (!googleClientId) {
       return res.status(500).json({ message: 'Google OAuth is not configured on the server' });
     }
 
     // Verify the Google ID token
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
-      audience: GOOGLE_CLIENT_ID,
+      audience: googleClientId,
     });
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
       return res.status(400).json({ message: 'Invalid Google token' });
     }
 
-    const { email, name, sub: googleId } = payload;
+    const { email, name, picture, sub: googleId } = payload;
     const displayName = name || email!.split('@')[0];
+    const safeAvatar = picture ? String(picture).slice(0, 500) : null;
 
     // Check if user already exists
     const [existingUsers] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE email = ?', [email]);
@@ -47,9 +54,12 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
     let userRole: string;
 
     if (existingUsers.length > 0) {
-      // Existing user - login
+      // Existing user - login & sync Google avatar if missing
       userId = existingUsers[0].id;
       userRole = existingUsers[0].role;
+      if (safeAvatar && !existingUsers[0].avatar_url) {
+        await pool.query('UPDATE users SET avatar_url = ? WHERE id = ?', [safeAvatar, userId]);
+      }
     } else {
       // New user - register with Google
       let defaultQuota = 15000;
@@ -63,8 +73,8 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
       const randomPassword = await bcrypt.hash(googleId + Date.now(), salt);
 
       const [result] = await pool.query<ResultSetHeader>(
-        'INSERT INTO users (name, email, password, token_quota) VALUES (?, ?, ?, ?)',
-        [displayName, email, randomPassword, defaultQuota]
+        'INSERT INTO users (name, email, password, avatar_url, token_quota) VALUES (?, ?, ?, ?, ?)',
+        [displayName, email, randomPassword, safeAvatar, defaultQuota]
       );
       userId = result.insertId;
       userRole = 'user';
@@ -82,12 +92,17 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Google auth error:', error?.message || error);
+    if (error?.code === 'ECONNREFUSED' || error?.errno === -4078) {
+      return res.status(503).json({
+        message: 'Không thể kết nối MySQL (port 3306 đang tắt). Hãy bật XAMPP / Docker MySQL rồi thử lại.',
+      });
+    }
     res.status(401).json({ message: 'Google authentication failed' });
   }
 });
 router.post('/register', authLimiter, validateAuthInput, async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, occupation, learning_goal } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Vui lòng điền đủ thông tin' });
     }
@@ -100,11 +115,14 @@ router.post('/register', authLimiter, validateAuthInput, async (req: Request, re
     if (settings.length > 0 && !isNaN(Number(settings[0].setting_value))) {
       defaultQuota = Number(settings[0].setting_value);
     }
+    const safeOccupation = occupation ? stripHtml(String(occupation).trim()).slice(0, 60) : null;
+    const safeGoal = learning_goal ? stripHtml(String(learning_goal).trim()).slice(0, 150) : null;
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO users (name, email, password, token_quota) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, defaultQuota]
+      'INSERT INTO users (name, email, password, occupation, learning_goal, token_quota) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, safeOccupation, safeGoal, defaultQuota]
     );
 
     const userId = result.insertId;
@@ -145,6 +163,12 @@ router.post('/login', authLimiter, validateAuthInput, async (req: Request, res: 
       id: user.id, 
       email: user.email, 
       name: user.name,
+      avatar_url: synced?.avatar_url ?? user.avatar_url ?? null,
+      occupation: synced?.occupation ?? user.occupation ?? null,
+      learning_goal: synced?.learning_goal ?? user.learning_goal ?? null,
+      plan_tier: synced?.plan_tier ?? user.plan_tier ?? 'free',
+      plan_expires_at: synced?.plan_expires_at ?? user.plan_expires_at ?? null,
+      created_at: synced?.created_at ?? user.created_at,
       role: user.role,
       token_quota: synced?.token_quota ?? user.token_quota,
       tokens_used: synced?.tokens_used ?? user.tokens_used,
@@ -205,16 +229,25 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { name, currentPassword, newPassword } = req.body;
+    const { name, occupation, learning_goal, currentPassword, newPassword } = req.body;
 
     // Fetch current user
     const [users] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ message: 'User not found' });
     const user = users[0];
 
-    // Update name if provided
-    if (name && name.trim()) {
-      await pool.query('UPDATE users SET name = ? WHERE id = ?', [name.trim(), userId]);
+    // Update profile fields if provided
+    if (name !== undefined && String(name).trim()) {
+      const cleanName = stripHtml(String(name).trim()).slice(0, 100);
+      await pool.query('UPDATE users SET name = ? WHERE id = ?', [cleanName, userId]);
+    }
+    if (occupation !== undefined) {
+      const cleanOcc = occupation ? stripHtml(String(occupation).trim()).slice(0, 60) : null;
+      await pool.query('UPDATE users SET occupation = ? WHERE id = ?', [cleanOcc, userId]);
+    }
+    if (learning_goal !== undefined) {
+      const cleanGoal = learning_goal ? stripHtml(String(learning_goal).trim()).slice(0, 150) : null;
+      await pool.query('UPDATE users SET learning_goal = ? WHERE id = ?', [cleanGoal, userId]);
     }
 
     // Update password if provided

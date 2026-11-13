@@ -31,37 +31,42 @@ export default function LanguageSwitcher() {
     <div className="relative z-50" ref={dropdownRef}>
       <button
         id="language-switcher-btn"
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors text-sm font-medium text-slate-200"
+        className="h-9 flex items-center gap-2 px-3 bg-[var(--bg-surface)] hover:border-[var(--text-muted)] border border-[var(--border-color)] rounded-lg transition-all duration-200 text-xs font-medium text-[var(--text-main)]"
       >
-        <Globe size={16} className="text-indigo-400" />
+        <Globe size={14} className="text-[var(--accent)]" />
         <span className="hidden sm:inline">{currentLang.label}</span>
-        <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="sm:hidden uppercase">{currentLang.code}</span>
+        <ChevronDown size={13} className={`text-[var(--text-muted)] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute right-0 mt-2 w-40 bg-[#111111]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+            exit={{ opacity: 0, y: 8, scale: 0.96 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-0 mt-2 w-40 bg-[var(--bg-surface)]/95 backdrop-blur-xl border border-[var(--border-color)] rounded-xl shadow-float overflow-hidden"
           >
             <div className="py-1">
               {languages.map((lang) => (
                 <button
                   key={lang.code}
+                  type="button"
                   id={`language-option-${lang.code}`}
                   onClick={() => {
                     i18n.changeLanguage(lang.code)
                     setIsOpen(false)
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-white/10 ${
-                    currentLang.code === lang.code ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-300'
+                  className={`w-full flex items-center gap-3 px-3.5 py-2 text-xs font-medium transition-colors hover:bg-[var(--bg-elevated)] ${
+                    currentLang.code === lang.code
+                      ? 'text-[var(--accent)] bg-[var(--accent-soft)]'
+                      : 'text-[var(--text-main)]'
                   }`}
                 >
-                  <span className="text-base">{lang.flag}</span>
+                  <span className="text-sm">{lang.flag}</span>
                   {lang.label}
                 </button>
               ))}

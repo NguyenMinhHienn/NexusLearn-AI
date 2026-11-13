@@ -1,250 +1,333 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Loader2, ArrowRight, Sun, Moon } from 'lucide-react'
+import {
+  Loader2,
+  ArrowRight,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  KeyRound,
+  X,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useTheme } from '../contexts/ThemeContext'
+import { usePageTitle } from '../utils/usePageTitle'
+import GoogleAuthButton from '../components/GoogleAuthButton'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const fadeUp: any = {
-  hidden: { opacity: 0, y: 15 },
+  hidden: { opacity: 0, y: 12 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] },
+    transition: { delay: i * 0.045, duration: 0.4, ease: [0.16, 1, 0.3, 1] },
   }),
 }
-
-const quoteKeys = ['auth.quote_1', 'auth.quote_2', 'auth.quote_3']
-import { usePageTitle } from '../utils/usePageTitle'
 
 export default function LoginPage() {
   usePageTitle('login')
   const { t } = useTranslation()
-  const { theme, setTheme } = useTheme()
-  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark')
+  const { login } = useAuth()
+  const navigate = useNavigate()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
+  const [capsLock, setCapsLock] = useState(false)
   const [error, setError] = useState('')
+  const [shakeKey, setShakeKey] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [quoteIndex, setQuoteIndex] = useState(0)
-  const { login, loginWithGoogle } = useAuth()
-  const navigate = useNavigate()
-  const [googleLoading, setGoogleLoading] = useState(false)
 
-  const GOOGLE_CLIENT_ID = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || ''
+  // Forgot password modal state
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSubmitted, setForgotSubmitted] = useState(false)
 
-  // Load Google Identity Services script
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return
-    const script = document.createElement('script')
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      (window as any).google?.accounts?.id?.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCallback,
-      })
-      const btnEl = document.getElementById('google-signin-btn-login')
-      if (btnEl) {
-        (window as any).google?.accounts?.id?.renderButton(btnEl, {
-          theme: isDark ? 'filled_black' : 'outline',
-          size: 'large',
-          width: btnEl.offsetWidth,
-          text: 'signin_with',
-          shape: 'rectangular',
-          logo_alignment: 'left',
-        })
-      }
-    }
-    document.body.appendChild(script)
-    return () => { document.body.removeChild(script) }
-  }, [GOOGLE_CLIENT_ID, isDark])
+    const saved = localStorage.getItem('nexuslearn_saved_email')
+    if (saved) setEmail(saved)
+  }, [])
 
-  const handleGoogleCallback = async (response: any) => {
-    if (!response?.credential) return
-    setGoogleLoading(true)
-    setError('')
-    try {
-      await loginWithGoogle(response.credential)
-      navigate('/app')
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Google login failed')
-    } finally {
-      setGoogleLoading(false)
+  const isEmailValid = EMAIL_RE.test(email.trim())
+
+  const checkCaps = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.getModifierState) {
+      setCapsLock(e.getModifierState('CapsLock'))
     }
   }
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setQuoteIndex(prev => (prev + 1) % quoteKeys.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [])
+  const triggerError = (msg: string) => {
+    setError(msg)
+    setShakeKey((prev) => prev + 1)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      await login(email, password)
+      if (rememberMe) {
+        localStorage.setItem('nexuslearn_saved_email', email.trim())
+      } else {
+        localStorage.removeItem('nexuslearn_saved_email')
+      }
+      await login(email.trim(), password)
       navigate('/app')
     } catch (err: any) {
-      setError(err.response?.data?.message || t('auth.login_failed'))
+      triggerError(err.response?.data?.message || t('auth.login_failed'))
     } finally {
       setLoading(false)
     }
   }
 
+  const handleForgotSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!forgotEmail.trim()) return
+    setForgotSubmitted(true)
+    const subject = encodeURIComponent(`NexusLearn AI - Password Reset (${forgotEmail.trim()})`)
+    const body = encodeURIComponent(
+      `Xin chào Admin NexusLearn AI,\n\nTôi cần hỗ trợ đặt lại mật khẩu cho tài khoản: ${forgotEmail.trim()}`
+    )
+    window.open(`mailto:admin@studymate.com?subject=${subject}&body=${body}`, '_blank')
+  }
+
   return (
-    <div className="min-h-screen bg-[var(--bg-main)] flex flex-col md:flex-row">
-      {/* Left Side - Typography & Grid (Hidden on mobile) */}
-      <div className="hidden md:flex w-1/2 relative bg-[var(--bg-surface)] border-r border-[var(--border-color)] overflow-hidden items-center justify-center p-12">
-        <div className="absolute inset-0 bg-grid-pattern opacity-40" style={{ maskImage: 'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 20%, black 80%, transparent)' }}></div>
-        
-        <div className="relative z-10 w-full max-w-lg">
-          <Link to="/" className="flex items-center gap-3 group mb-20">
-            <div className="w-10 h-10 bg-transparent rounded-lg overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
-              <img src="/logo.jpg" alt="NexusLearn" className="w-full h-full object-cover" />
-            </div>
-            <span className="font-heading font-semibold text-2xl tracking-tight text-[var(--text-main)]">NexusLearn</span>
-          </Link>
+    <motion.div initial="hidden" animate="visible" className="w-full">
+      <motion.div custom={0} variants={fadeUp} className="mb-5">
+        <h1 className="text-2xl sm:text-[28px] font-heading font-bold tracking-tight text-[var(--text-main)]">
+          {t('auth.login_title')}
+        </h1>
+        <p className="mt-1 text-[var(--text-muted)] text-xs sm:text-sm">
+          {t('auth.login_subtitle')}
+        </p>
+      </motion.div>
 
-          <div className="min-h-[160px] relative">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={quoteIndex}
-                initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute inset-0"
-              >
-                <h1 className="text-4xl lg:text-5xl font-heading font-semibold tracking-tight leading-[1.2] text-[var(--text-main)]">
-                  {t(quoteKeys[quoteIndex])}
-                </h1>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+      {/* Google One-Click Login Always Visible */}
+      <motion.div custom={1} variants={fadeUp}>
+        <GoogleAuthButton mode="login" onError={triggerError} />
+        <div className="relative flex items-center py-4">
+          <div className="flex-grow border-t border-[var(--border-color)]" />
+          <span className="flex-shrink-0 mx-3 text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
+            {t('auth.or_continue_with')}
+          </span>
+          <div className="flex-grow border-t border-[var(--border-color)]" />
         </div>
-      </div>
+      </motion.div>
 
-      {/* Right Side - Form */}
-      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-24 relative">
-        {/* Theme Toggle - top right */}
-        <button
-          onClick={toggleTheme}
-          className="absolute top-6 right-6 w-9 h-9 flex items-center justify-center rounded-md border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-muted)] transition-all duration-200 z-10"
-          aria-label="Toggle theme"
+      {error ? (
+        <motion.div
+          key={shakeKey}
+          initial={{ opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: [0, -6, 6, -4, 4, 0] }}
+          transition={{ duration: 0.35 }}
+          className="mb-4 flex items-start gap-2.5 bg-red-500/10 border border-red-500/25 text-red-500 text-xs sm:text-sm rounded-xl p-3.5"
         >
-          {isDark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        {/* Mobile Header */}
-        <div className="md:hidden flex justify-center mb-10">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 bg-transparent rounded-md overflow-hidden flex items-center justify-center border border-[var(--border-color)]">
-              <img src="/logo.jpg" alt="NexusLearn" className="w-full h-full object-cover" />
-            </div>
-            <span className="font-heading font-semibold text-xl tracking-tight text-[var(--text-main)]">NexusLearn</span>
-          </Link>
-        </div>
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </motion.div>
+      ) : null}
 
-        <motion.div initial="hidden" animate="visible" className="w-full max-w-md mx-auto">
-          <motion.div custom={0} variants={fadeUp} className="mb-10">
-            <h2 className="text-3xl font-heading font-semibold tracking-tight text-[var(--text-main)]">
-              {t('auth.login_title')}
-            </h2>
-            <p className="mt-2 text-[var(--text-muted)] text-sm">
-              {t('auth.login_subtitle')}
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <motion.div custom={2} variants={fadeUp}>
+          <label className="block text-xs font-semibold text-[var(--text-main)] mb-1.5">
+            {t('auth.email_label')}
+          </label>
+          <div className="relative group">
+            <Mail
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-[var(--accent)] transition-colors"
+            />
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              className="w-full pl-10 pr-9 py-2.5 sm:py-3 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]/60"
+              placeholder={t('auth.email_placeholder')}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            {isEmailValid ? (
+              <CheckCircle2
+                size={15}
+                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-500"
+              />
+            ) : null}
+          </div>
+        </motion.div>
+
+        <motion.div custom={3} variants={fadeUp}>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold text-[var(--text-main)]">
+              {t('auth.password_label')}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setForgotEmail(email)
+                setForgotSubmitted(false)
+                setShowForgot(true)
+              }}
+              className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+            >
+              {t('auth.forgot_password')}
+            </button>
+          </div>
+          <div className="relative group">
+            <Lock
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-[var(--accent)] transition-colors"
+            />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              required
+              autoComplete="current-password"
+              onKeyDown={checkCaps}
+              onKeyUp={checkCaps}
+              className="w-full pl-10 pr-11 py-2.5 sm:py-3 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-soft)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]/60"
+              placeholder={t('auth.password_placeholder')}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? t('auth.hide_password') : t('auth.show_password')}
+              title={showPassword ? t('auth.hide_password') : t('auth.show_password')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-elevated)] transition-colors"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {capsLock ? (
+            <p className="mt-1.5 text-[11px] font-medium text-amber-500 flex items-center gap-1">
+              <AlertCircle size={12} /> {t('auth.caps_lock_on')}
             </p>
-          </motion.div>
+          ) : null}
+        </motion.div>
 
-          {error && (
-            <motion.div custom={1} variants={fadeUp} className="mb-6 bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded p-3">
-              {error}
-            </motion.div>
-          )}
+        <motion.div custom={4} variants={fadeUp} className="flex items-center pt-0.5">
+          <input
+            id="remember-me"
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-[var(--border-color)] bg-[var(--bg-main)] accent-[var(--accent)] cursor-pointer"
+          />
+          <label
+            htmlFor="remember-me"
+            className="ml-2 block text-xs text-[var(--text-muted)] cursor-pointer select-none"
+          >
+            {t('auth.remember_me')}
+          </label>
+        </motion.div>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <motion.div custom={2} variants={fadeUp}>
-              <label className="block text-sm font-medium text-[var(--text-main)] mb-1">{t('auth.email_label')}</label>
-              <input
-                type="email"
-                required
-                className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
-                placeholder={t('auth.email_placeholder')}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-            </motion.div>
+        <motion.div custom={5} variants={fadeUp} className="pt-1">
+          <button
+            type="submit"
+            disabled={loading}
+            className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[var(--accent)] to-amber-600 hover:brightness-105 active:scale-[0.985] transition-all disabled:opacity-50 shadow-soft"
+          >
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <>
+                <span>{t('auth.login_btn')}</span>
+                <ArrowRight
+                  size={16}
+                  className="transition-transform duration-200 group-hover:translate-x-0.5"
+                />
+              </>
+            )}
+          </button>
+        </motion.div>
+      </form>
 
-            <motion.div custom={3} variants={fadeUp}>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-[var(--text-main)]">{t('auth.password_label')}</label>
-                <a href="#" className="text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors">{t('auth.forgot_password')}</a>
+      <motion.div
+        custom={6}
+        variants={fadeUp}
+        className="mt-6 pt-5 border-t border-[var(--border-color)] text-center text-xs sm:text-sm"
+      >
+        <span className="text-[var(--text-muted)]">{t('auth.no_account')} </span>
+        <Link
+          to="/register"
+          className="font-semibold text-[var(--accent)] hover:underline transition-colors"
+        >
+          {t('auth.register_now')}
+        </Link>
+      </motion.div>
+
+      {/* Forgot Password Modal */}
+      <AnimatePresence>
+        {showForgot && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowForgot(false)}
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] shadow-float p-6"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center">
+                    <KeyRound size={17} />
+                  </div>
+                  <h3 className="text-base font-heading font-bold text-[var(--text-main)]">
+                    {t('auth.forgot_title')}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(false)}
+                  className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)]"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <input
-                type="password"
-                required
-                className="w-full px-4 py-3 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg focus:outline-none focus:border-[var(--text-muted)] focus:ring-1 focus:ring-[var(--text-muted)] transition-all text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
-                placeholder={t('auth.password_placeholder')}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
-            </motion.div>
 
-            <motion.div custom={4} variants={fadeUp} className="flex items-center">
-              <input
-                id="remember-me"
-                type="checkbox"
-                className="h-4 w-4 rounded border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-main)] focus:ring-[var(--text-main)] cursor-pointer transition-colors"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-[var(--text-muted)] cursor-pointer">
-                {t('auth.remember_me')}
-              </label>
-            </motion.div>
+              <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed mb-4">
+                {t('auth.forgot_desc')}
+              </p>
 
-            <motion.div custom={5} variants={fadeUp} className="pt-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-transparent rounded-lg text-sm font-medium text-[var(--bg-main)] bg-[var(--text-main)] hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : (
-                  <>{t('auth.login_btn')} <ArrowRight size={16} /></>
-                )}
-              </button>
-            </motion.div>
-          </form>
-
-          {/* Google Sign-In */}
-          {GOOGLE_CLIENT_ID && (
-            <motion.div custom={6} variants={fadeUp} className="mt-6">
-              <div className="relative flex items-center py-3">
-                <div className="flex-grow border-t border-[var(--border-color)]" />
-                <span className="flex-shrink-0 mx-4 text-xs text-[var(--text-muted)]">{t('auth.or_continue_with')}</span>
-                <div className="flex-grow border-t border-[var(--border-color)]" />
-              </div>
-              {googleLoading ? (
-                <div className="w-full flex justify-center items-center py-3">
-                  <Loader2 size={20} className="animate-spin text-[var(--text-muted)]" />
+              {forgotSubmitted ? (
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs leading-relaxed">
+                  {t('auth.forgot_sent', { email: forgotEmail })}
                 </div>
               ) : (
-                <div id="google-signin-btn-login" className="w-full flex justify-center" />
+                <form onSubmit={handleForgotSubmit} className="space-y-3">
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder={t('auth.email_placeholder')}
+                    className="w-full px-3.5 py-2.5 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)]"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 px-4 rounded-xl bg-[var(--text-main)] text-[var(--bg-main)] text-xs sm:text-sm font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    {t('auth.forgot_send')}
+                  </button>
+                </form>
               )}
             </motion.div>
-          )}
-
-          <motion.div custom={7} variants={fadeUp} className="mt-8 text-center text-sm">
-            <span className="text-[var(--text-muted)]">{t('auth.no_account')} </span>
-            <Link to="/register" className="font-medium text-[var(--text-main)] hover:underline">
-              {t('auth.register_now')}
-            </Link>
-          </motion.div>
-        </motion.div>
-      </div>
-    </div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

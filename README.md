@@ -51,9 +51,14 @@ Beautiful dashboard with **activity heatmap** (GitHub-style), learning streaks, 
 
 ### 🔐 Enterprise-Grade Auth
 - JWT authentication with **7-day auto-renewal**
-- **Google OAuth** one-click sign-in
-- Role-based access control (User / Admin)
-- Rate limiting & brute-force protection
+- **Google OAuth 2.0** one-click sign-in with automatic avatar synchronization
+- Learner persona & goal profiling, password strength analyzer, and Caps Lock detection
+- Role-based access control (User / Admin) + rate limiting & brute-force protection
+
+### 💳 Agentic SaaS Billing (Model Context Protocol + Stripe)
+- **Official MCP Server (`@modelcontextprotocol/sdk`)** integrated with **Gemini 2.5** (`InMemoryTransport` & `StdioServerTransport`), enabling the AI Assistant to dynamically discover tools, inspect live token quotas, compare plans, and generate interactive **Stripe Checkout** cards directly in-chat
+- **Stripe Subscriptions** (`Starter Free`, `Scholar Pro`, `Research Max`) with monthly/annual billing cycles and Customer Billing Portal
+- **HMAC-SHA256 Signed Webhooks** + server-to-server session verification backed by an **idempotent MySQL transaction ledger** (`payment_transactions`)
 
 ### ⚙️ Admin Control Panel
 Full admin dashboard with:
@@ -126,6 +131,8 @@ Full admin dashboard with:
 | **Multer** | File upload handling |
 | **pdf-parse** | PDF text extraction |
 | **google-auth-library** | Google OAuth verification |
+| **@modelcontextprotocol/sdk** | Official MCP Server & Agentic Tool Host |
+| **Stripe SDK** | SaaS Subscriptions, Checkout, Portal & Signed Webhooks |
 
 ### Infrastructure
 | Service | Role |

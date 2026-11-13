@@ -8,19 +8,38 @@
   :root {
     --bg-main: #FAFAFA;       /* Warm paper white */
     --bg-surface: #FFFFFF;    /* Pure white for panels */
+    --bg-elevated: #F4F4F3;   /* Subtle recessed/elevated surface */
     --text-main: #171717;     /* Near black */
     --text-muted: #525252;    /* Darker neutral gray - better contrast on light bg */
-    --border-color: #D4D4D4;  /* Slightly darker border for visibility */
-    --accent: #E57B3E;        /* Muted amber */
+    --border-color: #E2E2DF;  /* Crisp architectural border */
+    --accent: #E57B3E;        /* Warm amber */
+    --accent-soft: rgba(229, 123, 62, 0.10);
+    --accent-glow: rgba(229, 123, 62, 0.24);
   }
   
   .dark {
-    --bg-main: #111110;       /* Warm graphite */
-    --bg-surface: #181817;    /* Slightly lighter graphite */
+    --bg-main: #0D0D0C;       /* Deep Linear warm obsidian */
+    --bg-surface: #151514;    /* Elevated warm graphite */
+    --bg-elevated: #1D1D1B;   /* Secondary surface */
     --text-main: #EDEDEC;     /* Off-white */
-    --text-muted: #A1A19A;    /* Warm muted text */
-    --border-color: #2A2A28;  /* Subtle dark border */
+    --text-muted: #9B9B94;    /* Warm muted text */
+    --border-color: #262624;  /* Subtle dark border */
     --accent: #E57B3E;
+    --accent-soft: rgba(229, 123, 62, 0.14);
+    --accent-glow: rgba(229, 123, 62, 0.30);
+  }
+
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
   }
 
   body {
@@ -58,5 +77,15 @@
     background-size: 32px 32px;
     background-image: linear-gradient(to right, var(--border-color) 1px, transparent 1px),
                       linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
+  }
+  .bg-dot-matrix {
+    background-size: 24px 24px;
+    background-image: radial-gradient(circle, var(--border-color) 1px, transparent 1px);
+  }
+  .perspective-1200 {
+    perspective: 1200px;
+  }
+  .perspective-1600 {
+    perspective: 1600px;
   }
 }

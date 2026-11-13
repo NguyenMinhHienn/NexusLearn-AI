@@ -1,13 +1,19 @@
 import pool from '../config/db';
 import { RowDataPacket } from 'mysql2';
 
+let schemaReady = false;
+let schemaInflight: Promise<void> | null = null;
+
 /**
- * Lightweight, idempotent migrations executed at server start.
- * Keeps existing databases (created from older schema versions) in sync
- * so features like daily quota reset and activity tracking always work.
+ * Lightweight, idempotent migrations executed at server start (and lazily
+ * retried if the database was offline during boot).
  */
 export async function ensureSchema(): Promise<void> {
-  try {
+  if (schemaReady) return;
+  if (schemaInflight) return schemaInflight;
+
+  schemaInflight = (async () => {
+    try {
     // 1. users.last_quota_reset (older DBs may miss it)
     const [cols] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM users LIKE 'last_quota_reset'");
     if (cols.length === 0) {
@@ -17,6 +23,24 @@ export async function ensureSchema(): Promise<void> {
       // MySQL may auto-attach ON UPDATE CURRENT_TIMESTAMP; that would move the reset time whenever tokens are spent
       await pool.query('ALTER TABLE users MODIFY last_quota_reset TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP');
       console.log('🛠  Removed ON UPDATE from users.last_quota_reset');
+    }
+
+    // 1b. Extended user profile & SaaS subscription columns
+    const profileColumns: Array<[string, string]> = [
+      ['avatar_url', 'VARCHAR(500) NULL'],
+      ['occupation', 'VARCHAR(60) NULL'],
+      ['learning_goal', 'VARCHAR(150) NULL'],
+      ['plan_tier', "VARCHAR(20) NOT NULL DEFAULT 'free'"],
+      ['stripe_customer_id', 'VARCHAR(100) NULL'],
+      ['stripe_subscription_id', 'VARCHAR(100) NULL'],
+      ['plan_expires_at', 'TIMESTAMP NULL'],
+    ];
+    for (const [colName, colDef] of profileColumns) {
+      const [c] = await pool.query<RowDataPacket[]>(`SHOW COLUMNS FROM users LIKE '${colName}'`);
+      if (c.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN ${colName} ${colDef}`);
+        console.log(`🛠  Added users.${colName}`);
+      }
     }
 
     // 2. system_settings table + default rows
@@ -66,9 +90,34 @@ export async function ensureSchema(): Promise<void> {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
-  } catch (error) {
-    console.error('⚠️  ensureSchema failed (server will keep running):', error);
-  }
+
+    // 5. payment_transactions table (idempotent Stripe + MCP subscription ledger)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payment_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        stripe_session_id VARCHAR(120) UNIQUE NOT NULL,
+        stripe_payment_intent VARCHAR(120) NULL,
+        plan_id VARCHAR(30) NOT NULL,
+        billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
+        amount_cents INT NOT NULL,
+        currency VARCHAR(10) NOT NULL DEFAULT 'usd',
+        status VARCHAR(30) NOT NULL DEFAULT 'paid',
+        source VARCHAR(30) NOT NULL DEFAULT 'stripe',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_payment_user_created (user_id, created_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+      schemaReady = true;
+    } catch (error) {
+      console.error('⚠️  ensureSchema failed (server will keep running):', error);
+    } finally {
+      schemaInflight = null;
+    }
+  })();
+
+  return schemaInflight;
 }
 
 export type ActivityType = 'upload' | 'level_complete' | 'quiz' | 'chat' | 'flashcard' | 'review';

@@ -2,7 +2,7 @@
 CREATE DATABASE IF NOT EXISTS studymate CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE studymate;
 
--- Bảng Users
+-- 1. Bảng Users
 CREATE TABLE IF NOT EXISTS users (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(100) NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Bảng Documents
+-- 2. Bảng Documents
 CREATE TABLE IF NOT EXISTS documents (
   id INT PRIMARY KEY AUTO_INCREMENT,
   user_id INT NOT NULL,
@@ -33,7 +33,17 @@ CREATE TABLE IF NOT EXISTS documents (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Bảng Concepts
+-- 3. Bảng Document Chunks (Hybrid BM25 Chunk Retrieval cho tài liệu dài)
+CREATE TABLE IF NOT EXISTS document_chunks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  document_id INT NOT NULL,
+  chunk_index INT NOT NULL,
+  content TEXT NOT NULL,
+  INDEX idx_doc_chunks_doc (document_id, chunk_index),
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+-- 4. Bảng Concepts (Bài học theo 3 cấp độ)
 CREATE TABLE IF NOT EXISTS concepts (
   id INT PRIMARY KEY AUTO_INCREMENT,
   document_id INT NOT NULL,
@@ -43,68 +53,68 @@ CREATE TABLE IF NOT EXISTS concepts (
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
--- Bảng Concept Relationships (Để vẽ Map)
+-- 5. Bảng Concept Relationships (Đồ thị Knowledge Map)
 CREATE TABLE IF NOT EXISTS concept_relationships (
   id INT PRIMARY KEY AUTO_INCREMENT,
   source_concept_id INT NOT NULL,
   target_concept_id INT NOT NULL,
-  label VARCHAR(255) NOT NULL, -- vd: "cần hiểu trước", "mở rộng"
+  label VARCHAR(255) NOT NULL,
   FOREIGN KEY (source_concept_id) REFERENCES concepts(id) ON DELETE CASCADE,
   FOREIGN KEY (target_concept_id) REFERENCES concepts(id) ON DELETE CASCADE
 );
 
--- Bảng Quiz Questions
+-- 6. Bảng Quiz Questions
 CREATE TABLE IF NOT EXISTS quiz_questions (
   id INT PRIMARY KEY AUTO_INCREMENT,
   document_id INT NOT NULL,
   question TEXT NOT NULL,
-  options JSON NOT NULL, -- Dạng mảng chuỗi
-  correct_answer INT NOT NULL, -- Index của đáp án đúng (0, 1, 2, 3)
+  options JSON NOT NULL,
+  correct_answer INT NOT NULL,
   explanation TEXT,
   level ENUM('basic', 'intermediate', 'advanced') DEFAULT 'basic',
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
--- Bảng User Concept Progress
-CREATE TABLE IF NOT EXISTS user_concept_progress (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  user_id INT NOT NULL,
-  concept_id INT NOT NULL,
-  status ENUM('not_started', 'learning', 'understood', 'mastered') DEFAULT 'not_started',
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE,
-  UNIQUE KEY unique_user_concept (user_id, concept_id)
+-- 7. Bảng Flashcards (Lưu trữ bền vững đa thiết bị + Leitner Box)
+CREATE TABLE IF NOT EXISTS flashcards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  document_id INT NOT NULL,
+  term VARCHAR(255) NOT NULL,
+  definition TEXT NOT NULL,
+  known BOOLEAN NOT NULL DEFAULT FALSE,
+  box INT NOT NULL DEFAULT 1,
+  last_reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_flashcards_doc (document_id),
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
--- Bảng User Level Progress
+-- 8. Bảng User Level Progress
 CREATE TABLE IF NOT EXISTS user_level_progress (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   document_id INT NOT NULL,
   level ENUM('basic', 'intermediate', 'advanced') NOT NULL,
   is_completed BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
   UNIQUE KEY unique_user_doc_level (user_id, document_id, level)
 );
 
--- Bảng Cấu hình hệ thống (Settings)
+-- 9. Bảng Cấu hình hệ thống (Settings)
 CREATE TABLE IF NOT EXISTS system_settings (
   setting_key VARCHAR(50) PRIMARY KEY,
   setting_value VARCHAR(255) NOT NULL,
   description TEXT
 );
 
--- Thêm cấu hình mặc định
 INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
 ('default_token_quota', '15000', 'Hạn mức token mặc định cho user mới đăng ký'),
 ('quota_reset_period', '24', 'Thời gian tự động hồi hạn mức (giờ). 24 = làm mới lúc 0h mỗi ngày. Đặt 0 để tắt.'),
-('openai_api_key', '', 'Khóa API của OpenAI (Bỏ trống sẽ dùng mặc định của hệ thống)');
+('ai_model', 'gemini-2.5-flash', 'Model Gemini AI mặc định của hệ thống');
 
--- Thời điểm hoàn thành chặng (dùng cho thống kê)
-ALTER TABLE user_level_progress ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP;
-
--- Nhật ký hoạt động học tập (heatmap, streak, độ chính xác quiz)
+-- 10. Nhật ký hoạt động học tập (Heatmap 84 ngày, Streak, độ chính xác Quiz)
 CREATE TABLE IF NOT EXISTS user_activity (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
@@ -117,7 +127,7 @@ CREATE TABLE IF NOT EXISTS user_activity (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Bảng Giao dịch & Thuê bao (Idempotent Stripe + MCP Billing Ledger)
+-- 11. Bảng Giao dịch & Thuê bao (Idempotent Stripe + MCP Billing Ledger)
 CREATE TABLE IF NOT EXISTS payment_transactions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,

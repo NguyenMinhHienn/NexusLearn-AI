@@ -8,12 +8,14 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import {
   geminiAnalyzeDocument,
   geminiChatWithDocument,
+  geminiChatWithDocumentStream,
   geminiGenerateFlashcards,
   geminiReviewChat,
   resolveAiLang,
   MAX_ANALYZE_CHARS,
   MAX_HISTORY_TURNS,
 } from '../services/geminiAiService';
+import { storeDocumentChunks, buildHybridDocumentContext } from '../services/ragService';
 import { YoutubeTranscript } from 'youtube-transcript';
 import {
   syncUserQuota,
@@ -138,6 +140,11 @@ router.post('/upload', authenticateToken, uploadLimiter, sanitizeDocumentInput, 
     );
     const documentId = docResult.insertId;
     logActivity(userId, 'upload', documentId);
+
+    // Index full document into overlapping BM25 RAG chunks (up to 200k chars)
+    storeDocumentChunks(documentId, extractedText).catch(err =>
+      console.error('storeDocumentChunks error:', err?.message || err)
+    );
 
     // Background analysis; real token usage is deducted inside when it finishes
     const lang = resolveAiLang(req.headers['accept-language']);
@@ -320,9 +327,8 @@ router.post('/review-chat', authenticateToken, chatLimiter, sanitizeChatInput, a
 
     const documentContexts = [];
     for (const doc of docs) {
-      const [concepts] = await pool.query<RowDataPacket[]>('SELECT name, summary FROM concepts WHERE document_id = ?', [doc.id]);
-      const content = concepts.map(c => `[${c.name}]:\n${c.summary}`).join('\n\n');
-      documentContexts.push({ title: doc.title, content });
+      const hybrid = await buildHybridDocumentContext(doc.id, message, 3);
+      documentContexts.push({ title: doc.title, content: hybrid.contextText });
     }
 
     const check = checkQuota(user, estimateChatCost(documentContexts.map(d => d.content).join('\n'), history, message));
@@ -453,20 +459,110 @@ router.post('/:id/chat', authenticateToken, chatLimiter, sanitizeChatInput, asyn
     const doc = await findOwnedDocument(docId, userId);
     if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
 
-    const [concepts] = await pool.query<RowDataPacket[]>('SELECT name, summary FROM concepts WHERE document_id = ?', [docId]);
-    const contextStr = concepts.map(c => `[${c.name}]:\n${c.summary}`).join('\n\n');
+    const { contextText, retrievedChunksCount } = await buildHybridDocumentContext(docId, message, 5);
 
-    const check = checkQuota(user, estimateChatCost(contextStr, history, message));
+    const check = checkQuota(user, estimateChatCost(contextText, history, message));
     if (!check.ok) return quotaExceeded(res, check, 'chat');
 
-    const aiResponse = await geminiChatWithDocument(contextStr, message, history || [], resolveAiLang(req.headers['accept-language']));
+    const aiResponse = await geminiChatWithDocument(contextText, message, history || [], resolveAiLang(req.headers['accept-language']));
     await addTokenUsage(userId, aiResponse.tokensUsed || 50);
     logActivity(userId, 'chat', docId);
 
-    res.json({ text: aiResponse.text, usage: await usagePayload(userId) });
+    res.json({
+      text: aiResponse.text,
+      retrievedChunks: retrievedChunksCount,
+      usage: await usagePayload(userId),
+    });
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ message: 'Lỗi khi chat với AI' });
+  }
+});
+
+// Real-time Server-Sent Events (SSE) Streaming Tutor Chat with Hybrid BM25 RAG
+router.post('/:id/chat/stream', authenticateToken, chatLimiter, sanitizeChatInput, async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const user = await syncUserQuota(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { message, history } = req.body;
+    if (!message || !String(message).trim()) return res.status(400).json({ message: 'Message is required' });
+
+    const doc = await findOwnedDocument(docId, userId);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const { contextText, retrievedChunksCount } = await buildHybridDocumentContext(docId, message, 5);
+
+    const check = checkQuota(user, estimateChatCost(contextText, history, message));
+    if (!check.ok) return quotaExceeded(res, check, 'chat');
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const sendEvent = (payload: Record<string, unknown>) => {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    sendEvent({ meta: true, retrievedChunks: retrievedChunksCount });
+
+    const streamRes = await geminiChatWithDocumentStream(
+      contextText,
+      message,
+      history || [],
+      resolveAiLang(req.headers['accept-language']),
+      delta => sendEvent({ delta })
+    );
+
+    await addTokenUsage(userId, streamRes.tokensUsed || 50);
+    logActivity(userId, 'chat', docId);
+
+    sendEvent({
+      done: true,
+      retrievedChunks: retrievedChunksCount,
+      usage: await usagePayload(userId),
+    });
+    res.end();
+  } catch (error) {
+    console.error('Stream chat error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Lỗi khi chat với AI' });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: 'Lỗi khi đang truyền phản hồi từ AI' })}\n\n`);
+      res.end();
+    }
+  }
+});
+
+// Get persisted flashcards for a document
+router.get('/:id/flashcards', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const docId = req.params.id;
+    const doc = await findOwnedDocument(docId, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, term, definition, known, box, last_reviewed_at FROM flashcards WHERE document_id = ? ORDER BY id ASC',
+      [docId]
+    );
+    res.json({
+      cards: rows.map(r => ({
+        id: r.id,
+        term: r.term,
+        definition: r.definition,
+        known: Boolean(r.known),
+        box: Number(r.box) || 1,
+      })),
+    });
+  } catch (error) {
+    console.error('Get flashcards error:', error);
+    res.status(500).json({ message: 'Lỗi khi tải flashcard' });
   }
 });
 
@@ -493,10 +589,50 @@ router.post('/:id/flashcards/generate', authenticateToken, flashcardLimiter, asy
     await addTokenUsage(userId, flashcardResult.tokensUsed || 200);
     logActivity(userId, 'flashcard', docId);
 
-    res.json({ cards: flashcardResult.data, usage: await usagePayload(userId) });
+    const generatedList = Array.isArray(flashcardResult.data) ? flashcardResult.data : [];
+    const savedCards: Array<{ id?: number; term: string; definition: string; known: boolean; box: number }> = [];
+
+    if (generatedList.length > 0) {
+      await pool.query('DELETE FROM flashcards WHERE document_id = ?', [docId]);
+      for (const item of generatedList) {
+        const term = String(item?.term || '').trim().slice(0, 255);
+        const definition = String(item?.definition || '').trim();
+        if (!term || !definition) continue;
+        const [ins] = await pool.query<ResultSetHeader>(
+          'INSERT INTO flashcards (document_id, term, definition, known, box) VALUES (?, ?, ?, FALSE, 1)',
+          [docId, term, definition]
+        );
+        savedCards.push({ id: ins.insertId, term, definition, known: false, box: 1 });
+      }
+    }
+
+    res.json({ cards: savedCards, usage: await usagePayload(userId) });
   } catch (error) {
     console.error('Flashcard error:', error);
     res.status(500).json({ message: 'Lỗi khi tạo flashcard' });
+  }
+});
+
+// Update Leitner box & mastery status of a persisted flashcard
+router.patch('/:id/flashcards/:cardId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const doc = await findOwnedDocument(req.params.id, req.user?.id);
+    if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu' });
+
+    const known = Boolean(req.body?.known);
+    await pool.query(
+      `UPDATE flashcards
+       SET known = ?,
+           box = CASE WHEN ? THEN LEAST(box + 1, 5) ELSE 1 END,
+           last_reviewed_at = NOW()
+       WHERE id = ? AND document_id = ?`,
+      [known, known, req.params.cardId, req.params.id]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update flashcard error:', error);
+    res.status(500).json({ message: 'Lỗi khi cập nhật flashcard' });
   }
 });
 

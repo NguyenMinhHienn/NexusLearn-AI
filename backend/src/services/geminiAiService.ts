@@ -253,8 +253,8 @@ export const geminiChatWithDocument = async (documentContext: string, userMessag
     model: activeModelName,
     systemInstruction: `Bạn là Gia Sư Ảo AI (Virtual Tutor) chuyên nghiệp của ứng dụng NexusLearn.
 Nhiệm vụ của bạn:
-1. Giải đáp thắc mắc của học sinh chủ yếu dựa trên TÀI LIỆU được cung cấp bên dưới.
-2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế.
+1. Giải đáp thắc mắc của học sinh chủ yếu dựa trên TÀI LIỆU và các đoạn trích gốc [Excerpt #N] được cung cấp bên dưới.
+2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế; khi trích dẫn thông tin từ đoạn trích gốc hãy ghi nhẹ nguồn (ví dụ: theo Đoạn #2 / Excerpt #2) để tăng độ tin cậy.
 3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
 4. YÊU CẦU ĐẶC BIỆT: Phải luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo. Dù học sinh có nói tục, chửi thề, trêu chọc hay hỏi những câu không liên quan, bạn BẮT BUỘC phải giữ thái độ điềm tĩnh, lịch sự từ chối trả lời những nội dung độc hại đó, và khéo léo hướng học sinh quay lại bài học. Tuyệt đối không bao giờ được tức giận hay hùa theo.${langDirective(lang)}`,
     generationConfig: NO_THINKING,
@@ -267,11 +267,55 @@ Nhiệm vụ của bạn:
 
   const chat = model.startChat({ history });
 
-  const prompt = `--- BỐI CẢNH TÀI LIỆU (Chỉ dùng để tham khảo trả lời) ---\n${documentContext}\n\n--- CÂU HỎI CỦA HỌC SINH ---\n${userMessage}`;
+  const prompt = `--- BỐI CẢNH TÀI LIỆU & ĐOẠN TRÍCH GỐC (RAG) ---\n${documentContext}\n\n--- CÂU HỎI CỦA HỌC SINH ---\n${userMessage}`;
   const result = await chat.sendMessage(prompt);
   const response = await result.response;
   const tokensUsed = response.usageMetadata?.totalTokenCount || 50;
   return { text: response.text(), tokensUsed };
+};
+
+export const geminiChatWithDocumentStream = async (
+  documentContext: string,
+  userMessage: string,
+  chatHistory: { role: string; text: string }[] = [],
+  lang: AiLang = 'vi',
+  onChunk: (deltaText: string) => void
+): Promise<{ fullText: string; tokensUsed: number }> => {
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
+
+  const activeModelName = await getActiveModel();
+
+  const model = genAI.getGenerativeModel({
+    model: activeModelName,
+    systemInstruction: `Bạn là Gia Sư Ảo AI (Virtual Tutor) chuyên nghiệp của ứng dụng NexusLearn.
+Nhiệm vụ của bạn:
+1. Giải đáp thắc mắc của học sinh dựa trên TÀI LIỆU và các đoạn trích gốc [Excerpt #N] được cung cấp bên dưới.
+2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế; khi trích dẫn thông tin từ đoạn trích gốc hãy ghi nhẹ nguồn (ví dụ: theo Đoạn #2 / Excerpt #2).
+3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
+4. Luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo.${langDirective(lang)}`,
+    generationConfig: NO_THINKING,
+  });
+
+  const history = trimHistory(chatHistory).map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.text }],
+  }));
+
+  const chat = model.startChat({ history });
+  const prompt = `--- BỐI CẢNH TÀI LIỆU & ĐOẠN TRÍCH GỐC (RAG) ---\n${documentContext}\n\n--- CÂU HỎI CỦA HỌC SINH ---\n${userMessage}`;
+
+  const streamResult = await chat.sendMessageStream(prompt);
+  let fullText = '';
+  for await (const chunk of streamResult.stream) {
+    const delta = chunk.text();
+    if (delta) {
+      fullText += delta;
+      onChunk(delta);
+    }
+  }
+  const finalResponse = await streamResult.response;
+  const tokensUsed = finalResponse.usageMetadata?.totalTokenCount || 50;
+  return { fullText, tokensUsed };
 };
 
 export const geminiGenerateFlashcards = async (documentContext: string, lang: AiLang = 'vi') => {

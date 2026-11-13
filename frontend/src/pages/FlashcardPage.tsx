@@ -1,20 +1,24 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, RefreshCw, ChevronLeft, ChevronRight, Brain, Shuffle, Check, X, AlertCircle } from 'lucide-react'
+import { ArrowLeft, RefreshCw, ChevronLeft, ChevronRight, Brain, Shuffle, Check, X, AlertCircle, Layers } from 'lucide-react'
 import axios from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { getApiErrorMessage } from '../utils/api'
 
 interface Flashcard {
+  id?: number
   term: string
   definition: string
+  known?: boolean
+  box?: number
 }
 
 export default function FlashcardPage() {
   const { id } = useParams()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isVi = (i18n.language || 'vi').startsWith('vi')
   const { user, applyUsage } = useAuth()
   const [cards, setCards] = useState<Flashcard[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -23,7 +27,7 @@ export default function FlashcardPage() {
   const [error, setError] = useState('')
   const [known, setKnown] = useState<Record<string, boolean>>({})
 
-  // Cache per user + document so accounts sharing a browser don't see each other's decks
+  // Local fallback cache key per user + document
   const storageKey = useMemo(() => `nexuslearn_flashcards_${user?.id ?? 'anon'}_${id}`, [user?.id, id])
   const knownKey = `${storageKey}_known`
 
@@ -39,9 +43,11 @@ export default function FlashcardPage() {
         setCards(list)
         setCurrentIndex(0)
         setIsFlipped(false)
-        setKnown({})
+        const nextKnown: Record<string, boolean> = {}
+        list.forEach(c => { if (c.known) nextKnown[c.term] = true })
+        setKnown(nextKnown)
         localStorage.setItem(storageKey, JSON.stringify(list))
-        localStorage.removeItem(knownKey)
+        localStorage.setItem(knownKey, JSON.stringify(nextKnown))
       } else {
         setError(t('flashcards.generate_error'))
       }
@@ -55,21 +61,52 @@ export default function FlashcardPage() {
 
   useEffect(() => {
     if (!id) return
-    const cached = localStorage.getItem(storageKey)
-    if (cached) {
+    let cancelled = false
+
+    const loadPersistedOrGenerate = async () => {
+      setLoading(true)
+      setError('')
       try {
-        const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCards(parsed)
-          try { setKnown(JSON.parse(localStorage.getItem(knownKey) || '{}')) } catch { /* ignore */ }
+        // 1. Check MySQL-persisted flashcards first (works across browsers/devices)
+        const res = await axios.get(`/api/documents/${id}/flashcards`)
+        const saved: Flashcard[] = Array.isArray(res.data?.cards) ? res.data.cards : []
+        if (!cancelled && saved.length > 0) {
+          setCards(saved)
+          const dbKnown: Record<string, boolean> = {}
+          saved.forEach(c => { if (c.known) dbKnown[c.term] = true })
+          setKnown(dbKnown)
+          localStorage.setItem(storageKey, JSON.stringify(saved))
+          localStorage.setItem(knownKey, JSON.stringify(dbKnown))
           setLoading(false)
           return
         }
-      } catch { /* fall through and regenerate */ }
+      } catch {
+        // Fall back to local cache if endpoint unreachable
+      }
+
+      if (cancelled) return
+
+      // 2. Fallback to localStorage cache if legacy deck exists
+      const cached = localStorage.getItem(storageKey)
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCards(parsed)
+            try { setKnown(JSON.parse(localStorage.getItem(knownKey) || '{}')) } catch { /* ignore */ }
+            setLoading(false)
+            return
+          }
+        } catch { /* fall through */ }
+      }
+
+      // 3. Otherwise generate & persist a new deck
+      await generate()
     }
-    generate()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, storageKey])
+
+    loadPersistedOrGenerate()
+    return () => { cancelled = true }
+  }, [id, storageKey, knownKey, generate])
 
   const goTo = useCallback((next: number) => {
     if (next < 0 || next >= cards.length) return
@@ -98,11 +135,25 @@ export default function FlashcardPage() {
   }
 
   const toggleKnown = (value: boolean) => {
-    const term = cards[currentIndex]?.term
-    if (!term) return
-    const updated = { ...known, [term]: value }
-    setKnown(updated)
-    localStorage.setItem(knownKey, JSON.stringify(updated))
+    const current = cards[currentIndex]
+    if (!current?.term) return
+
+    const updatedKnown = { ...known, [current.term]: value }
+    setKnown(updatedKnown)
+    localStorage.setItem(knownKey, JSON.stringify(updatedKnown))
+
+    const nextBox = value ? Math.min((current.box || 1) + 1, 5) : 1
+    setCards(prev =>
+      prev.map((c, idx) => (idx === currentIndex ? { ...c, known: value, box: nextBox } : c))
+    )
+
+    // Persist Leitner box & mastery to MySQL asynchronously
+    if (id && current.id) {
+      axios
+        .patch(`/api/documents/${id}/flashcards/${current.id}`, { known: value })
+        .catch(() => {})
+    }
+
     if (currentIndex < cards.length - 1) nextCard()
   }
 
@@ -178,12 +229,16 @@ export default function FlashcardPage() {
       </div>
 
       <div className="flex flex-col items-center">
-        <div className="flex items-center gap-3 mb-4 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-4 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>
           <span className="px-3 py-1 rounded-full border" style={{ borderColor: 'var(--border-color)' }}>
             {t('flashcards.card_n', { current: currentIndex + 1, total: cards.length })}
           </span>
           <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             {t('flashcards.known', { count: knownCount, total: cards.length })}
+          </span>
+          <span className="px-3 py-1 rounded-full border flex items-center gap-1.5 text-xs" style={{ borderColor: 'var(--border-color)' }}>
+            <Layers size={13} style={{ color: 'var(--accent)' }} />
+            {isVi ? `Hộp Leitner #${card.box || 1}/5` : `Leitner Box #${card.box || 1}/5`}
           </span>
         </div>
 

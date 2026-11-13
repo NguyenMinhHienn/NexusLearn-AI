@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'nexuslearn_super_secret_key_2026';
+import { verifyAuthToken } from '../config/jwt';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -9,8 +7,8 @@ export interface AuthRequest extends Request {
     email: string;
     name: string;
     role: string;
-    token_quota: number;
-    tokens_used: number;
+    token_quota?: number;
+    tokens_used?: number;
   };
 }
 
@@ -22,11 +20,11 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     return res.status(401).json({ message: 'Không có quyền truy cập' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });
-    }
-    req.user = user as any;
+  try {
+    const user = verifyAuthToken(token);
+    req.user = user;
     next();
-  });
+  } catch {
+    return res.status(403).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });
+  }
 };

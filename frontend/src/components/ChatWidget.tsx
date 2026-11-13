@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, X, Send, Bot, Sparkles } from 'lucide-react'
+import { MessageSquare, X, Send, Bot, Sparkles, BookOpenCheck } from 'lucide-react'
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import { useTranslation } from 'react-i18next'
@@ -12,12 +12,15 @@ interface Message {
   role: 'user' | 'model'
   text: string
   isError?: boolean
+  streaming?: boolean
+  retrievedChunks?: number
 }
 
 const WELCOME_ID = 'welcome'
 
 export default function ChatWidget({ documentId }: { documentId: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isVi = (i18n.language || 'vi').startsWith('vi')
   const { applyUsage, refreshUser } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [showIdleTooltip, setShowIdleTooltip] = useState(false)
@@ -43,28 +46,131 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
     if (!text || loadingRef.current) return
 
     const userMessage: Message = { id: Date.now().toString(), role: 'user', text }
+    const assistantMsgId = `${Date.now() + 1}`
     const history = messagesRef.current.filter(m => !m.isError).map(m => ({ role: m.role, text: m.text }))
+
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setLoading(true)
 
     try {
-      const res = await axios.post(`/api/documents/${documentId}/chat`, { message: text, history })
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'model', text: res.data.text }])
-      applyUsage(res.data.usage)
+      const baseUrl = (axios.defaults.baseURL || '').replace(/\/$/, '')
+      const token = localStorage.getItem('token') || ''
+      const langHeader = i18n.language || 'vi'
+
+      const response = await fetch(`${baseUrl}/api/documents/${documentId}/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept-Language': langHeader,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: text, history }),
+      })
+
+      if (!response.ok || !response.body) {
+        let errorPayload: any = null
+        try { errorPayload = await response.json() } catch { /* ignore */ }
+        const fakeAxiosErr = { response: { status: response.status, data: errorPayload } }
+        throw fakeAxiosErr
+      }
+
+      // Insert live streaming placeholder message
+      setMessages(prev => [
+        ...prev,
+        { id: assistantMsgId, role: 'model', text: '', streaming: true },
+      ])
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+      let streamedAny = false
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const rawEvent of parts) {
+          const line = rawEvent
+            .split('\n')
+            .find(l => l.startsWith('data:'))
+          if (!line) continue
+
+          try {
+            const payload = JSON.parse(line.slice(5).trim())
+            if (typeof payload.retrievedChunks === 'number') {
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantMsgId ? { ...m, retrievedChunks: payload.retrievedChunks } : m
+                )
+              )
+            }
+            if (typeof payload.delta === 'string' && payload.delta) {
+              streamedAny = true
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantMsgId ? { ...m, text: m.text + payload.delta } : m
+                )
+              )
+            }
+            if (payload.done) {
+              if (payload.usage) applyUsage(payload.usage)
+              setMessages(prev =>
+                prev.map(m => (m.id === assistantMsgId ? { ...m, streaming: false } : m))
+              )
+            }
+            if (payload.error) {
+              throw new Error(payload.error)
+            }
+          } catch {
+            // Ignore malformed SSE keepalive frames
+          }
+        }
+      }
+
+      // Ensure streaming flag is cleared when stream ends cleanly
+      setMessages(prev =>
+        prev.map(m => (m.id === assistantMsgId ? { ...m, streaming: false } : m))
+      )
+
+      // Fallback if proxy buffered/stripped empty stream
+      if (!streamedAny) {
+        const fallback = await axios.post(`/api/documents/${documentId}/chat`, { message: text, history })
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  text: fallback.data.text,
+                  retrievedChunks: fallback.data.retrievedChunks,
+                  streaming: false,
+                }
+              : m
+          )
+        )
+        applyUsage(fallback.data.usage)
+      }
     } catch (err: any) {
       console.error(err)
       if (isQuotaError(err)) refreshUser()
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        isError: true,
-        text: isQuotaError(err) ? getApiErrorMessage(err, t) : t('chat.error'),
-      }])
+      const errText = isQuotaError(err) ? getApiErrorMessage(err, t) : t('chat.error')
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === assistantMsgId)
+        if (exists) {
+          return prev.map(m =>
+            m.id === assistantMsgId ? { ...m, isError: true, streaming: false, text: errText } : m
+          )
+        }
+        return [...prev, { id: assistantMsgId, role: 'model', isError: true, text: errText }]
+      })
     } finally {
       setLoading(false)
     }
-  }, [documentId, applyUsage, refreshUser, t])
+  }, [documentId, applyUsage, refreshUser, t, i18n.language])
 
   // Other pages (e.g. Quiz) can open the tutor with a ready-made question
   useEffect(() => {
@@ -100,6 +206,7 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
   }, [isOpen, showIdleTooltip])
 
   const allMessages: Message[] = [{ id: WELCOME_ID, role: 'model', text: t('chat.tutor_welcome') }, ...messages]
+  const waitingFirstToken = loading && !messages.some(m => m.streaming && m.text.length > 0)
 
   return (
     <>
@@ -121,7 +228,7 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
             className="fixed bottom-24 right-6 z-40 max-w-[280px]"
           >
             <div className="relative bg-[var(--bg-surface)] text-[var(--text-main)] p-4 rounded border border-[var(--border-color)] shadow-xl">
-              <button 
+              <button
                 onClick={() => setShowIdleTooltip(false)}
                 className="absolute top-2 right-2 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
               >
@@ -158,7 +265,8 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
                 <div>
                   <h3 className="font-semibold text-sm text-[var(--text-main)]">{t('chat.tutor_name')}</h3>
                   <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {t('common.online')}
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    {t('common.online')} · BM25 RAG + SSE
                   </div>
                 </div>
               </div>
@@ -169,33 +277,49 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-[var(--bg-surface)]">
-              {allMessages.map((msg) => (
-                <div key={msg.id} className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
-                  <div className={`w-8 h-8 rounded shrink-0 flex items-center justify-center border ${
-                    msg.role === 'user' 
-                      ? 'bg-[var(--text-main)] border-[var(--text-main)] text-[var(--bg-main)]' 
-                      : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-main)]'
-                  }`}>
-                    {msg.role === 'user' ? <span className="text-xs font-bold">U</span> : <Bot size={16} />}
-                  </div>
-                  <div className={`p-3 rounded text-sm leading-relaxed ${
-                    msg.isError
-                      ? 'bg-red-500/5 border border-red-500/30 text-red-500'
-                      : msg.role === 'user' 
-                        ? 'bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)]' 
-                        : 'bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)]'
-                  }`}>
-                    {msg.role === 'model' && !msg.isError ? (
-                      <div className="prose prose-sm dark:prose-invert max-w-full break-words prose-p:leading-relaxed prose-pre:bg-[var(--bg-surface)] prose-pre:border prose-pre:border-[var(--border-color)] prose-pre:overflow-x-auto overflow-hidden">
-                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+              {allMessages.map((msg) => {
+                if (msg.streaming && !msg.text) return null
+                return (
+                  <div key={msg.id} className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
+                    <div className={`w-8 h-8 rounded shrink-0 flex items-center justify-center border ${
+                      msg.role === 'user'
+                        ? 'bg-[var(--text-main)] border-[var(--text-main)] text-[var(--bg-main)]'
+                        : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-main)]'
+                    }`}>
+                      {msg.role === 'user' ? <span className="text-xs font-bold">U</span> : <Bot size={16} />}
+                    </div>
+                    <div className="space-y-1.5 min-w-0">
+                      {msg.role === 'model' && typeof msg.retrievedChunks === 'number' && msg.retrievedChunks > 0 && (
+                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-emerald-500/25 bg-emerald-500/10 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <BookOpenCheck size={11} />
+                          {isVi
+                            ? `RAG · Đối chiếu ${msg.retrievedChunks} đoạn trích gốc`
+                            : `RAG · Grounded in ${msg.retrievedChunks} source excerpts`}
+                        </div>
+                      )}
+                      <div className={`p-3 rounded text-sm leading-relaxed ${
+                        msg.isError
+                          ? 'bg-red-500/5 border border-red-500/30 text-red-500'
+                          : msg.role === 'user'
+                            ? 'bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-main)]'
+                            : 'bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-main)]'
+                      }`}>
+                        {msg.role === 'model' && !msg.isError ? (
+                          <div className="prose prose-sm dark:prose-invert max-w-full break-words prose-p:leading-relaxed prose-pre:bg-[var(--bg-surface)] prose-pre:border prose-pre:border-[var(--border-color)] prose-pre:overflow-x-auto overflow-hidden">
+                            <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            {msg.streaming && (
+                              <span className="inline-block w-1.5 h-3.5 ml-1 align-middle bg-[var(--accent)] animate-pulse" />
+                            )}
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {loading && (
+                )
+              })}
+              {waitingFirstToken && (
                 <div className="flex gap-3 max-w-[85%]">
                   <div className="w-8 h-8 rounded shrink-0 bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-center">
                     <Bot size={16} className="text-[var(--text-main)]" />
@@ -212,7 +336,7 @@ export default function ChatWidget({ documentId }: { documentId: string }) {
 
             {/* Input */}
             <div className="p-4 bg-[var(--bg-main)] border-t border-[var(--border-color)] shrink-0">
-              <form 
+              <form
                 onSubmit={e => { e.preventDefault(); sendMessage(input) }}
                 className="flex items-center gap-2"
               >

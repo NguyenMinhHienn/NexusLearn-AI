@@ -1,12 +1,11 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
 import { resolveAiLang } from '../services/geminiAiService';
 import { globalChatLimiter } from '../middleware/rateLimiter';
 import { sanitizeChatInput } from '../middleware/validation';
 import { runMcpGlobalChat } from '../mcp/mcpChatAgent';
+import { verifyAuthToken } from '../config/jwt';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'nexuslearn_super_secret_key_2026';
 
 function extractOptionalUserId(authHeader?: string): number | undefined {
   if (!authHeader) return undefined;
@@ -14,7 +13,7 @@ function extractOptionalUserId(authHeader?: string): number | undefined {
   const token = parts.length === 2 ? parts[1] : undefined;
   if (!token) return undefined;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = verifyAuthToken(token);
     return decoded?.id ? Number(decoded.id) : undefined;
   } catch {
     return undefined;

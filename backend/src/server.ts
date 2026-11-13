@@ -10,9 +10,10 @@ import adminRoutes from './routes/admin';
 import chatRoutes from './routes/chat';
 import billingRoutes, { stripeWebhookHandler } from './routes/billing';
 import { authenticateToken } from './middleware/auth';
-import { ensureSchema } from './services/schemaService';
+import { ensureSchema, recoverStuckDocuments } from './services/schemaService';
 import { resetExpiredQuotas } from './services/quotaService';
 import { globalLimiter } from './middleware/rateLimiter';
+import { getJwtSecret } from './config/jwt';
 
 dotenv.config();
 
@@ -20,16 +21,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Security ────────────────────────────────────────────────────────
-// Helmet: tự động thêm 11+ HTTP security headers (XSS, clickjacking, MIME sniffing, HSTS…)
 app.use(helmet());
 
-// CORS: chỉ cho phép các origin trong whitelist (mặc định chỉ localhost dev)
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim());
 app.use(cors({
   origin: (origin, callback) => {
-    // Cho phép request không có origin (curl, mobile app, server-to-server)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -39,7 +37,6 @@ app.use(cors({
   credentials: true,
 }));
 
-// Rate Limiter toàn cục: 100 request / phút / IP
 app.use('/api', globalLimiter);
 
 // Stripe Signed Webhook MUST receive raw payload buffer before express.json()
@@ -55,12 +52,12 @@ app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
 app.use('/api/chat', chatRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'NexusLearn API is running' });
+// Health check (also used by frontend cold-start warmup probe)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', message: 'NexusLearn API is running', timestamp: new Date().toISOString() });
 });
 
-// Serve frontend static build if available (Hỗ trợ deploy Fullstack gộp 1 server)
+// Serve frontend static build if available
 const frontendDist = path.resolve(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
@@ -73,12 +70,21 @@ if (fs.existsSync(frontendDist)) {
 const QUOTA_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 
 async function bootstrap() {
+  // Fail fast in production if JWT_SECRET is not configured
+  getJwtSecret();
+
   await ensureSchema();
 
-  const sweep = () =>
-    resetExpiredQuotas()
-      .then(count => { if (count > 0) console.log(`🔄 Đã làm mới hạn mức AI cho ${count} người dùng`); })
-      .catch(err => console.error('Quota sweep error:', err?.message || err));
+  const sweep = async () => {
+    try {
+      const count = await resetExpiredQuotas();
+      if (count > 0) console.log(`🔄 Đã làm mới hạn mức AI cho ${count} người dùng`);
+      const recovered = await recoverStuckDocuments(15);
+      if (recovered > 0) console.log(`🩹 Đã phục hồi trạng thái cho ${recovered} tài liệu bị treo khi xử lý`);
+    } catch (err: any) {
+      console.error('Background sweep error:', err?.message || err);
+    }
+  };
 
   sweep();
   setInterval(sweep, QUOTA_SWEEP_INTERVAL_MS);

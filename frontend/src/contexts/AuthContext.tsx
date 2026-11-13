@@ -35,6 +35,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string, meta?: RegisterProfileMeta) => Promise<void>
   loginWithGoogle: (credential: string) => Promise<void>
+  loginAsDemo: () => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
   /** Apply usage numbers returned by AI endpoints so the token bar updates instantly. */
@@ -61,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const res = await axios.get('/api/auth/me')
           setUser(res.data.user)
-          // Auto-save renewed token if backend issued a fresh one
           if (res.data.token) {
             localStorage.setItem('token', res.data.token)
             axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`
@@ -71,6 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('token')
           delete axios.defaults.headers.common['Authorization']
         }
+      } else {
+        // Proactively wake up free-tier Render instance while visitor browses Landing / Auth pages
+        axios.get('/api/health').catch(() => {})
       }
       setLoading(false)
     }
@@ -116,12 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user)
   }
 
+  const loginAsDemo = async () => {
+    const res = await axios.post('/api/auth/demo')
+    const { token, user } = res.data
+    localStorage.setItem('token', token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setUser(user)
+  }
+
   const refreshUser = useCallback(async () => {
     if (!localStorage.getItem('token')) return
     try {
       const res = await axios.get('/api/auth/me')
       setUser(res.data.user)
-      // Auto-save renewed token
       if (res.data.token) {
         localStorage.setItem('token', res.data.token)
         axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`
@@ -144,7 +154,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, refreshUser, applyUsage }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        loginWithGoogle,
+        loginAsDemo,
+        logout,
+        refreshUser,
+        applyUsage,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

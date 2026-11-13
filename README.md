@@ -2,145 +2,108 @@
 
 # 🧠 NexusLearn AI
 
-### Hệ sinh thái E-learning thông minh biến tài liệu thô thành trải nghiệm học tập tương tác, được vận hành bởi Google Gemini AI.
+### Intelligent Full-Stack AI Learning Platform — Transforming Raw Documents into Interactive Knowledge Graphs, Hybrid RAG Tutoring & Adaptive Courses.
 
-[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-nexuslearn.vercel.app-000?style=for-the-badge&logo=vercel)](https://nexus-learn-ai-omega.vercel.app)
-[![Tech Stack](https://img.shields.io/badge/Stack-React_•_Express_•_MySQL-61DAFB?style=for-the-badge&logo=react&logoColor=white)](.)
-[![AI Engine](https://img.shields.io/badge/AI-Google_Gemini_2.5-4285F4?style=for-the-badge&logo=google&logoColor=white)](.)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge)](.)
-
-<br />
-
-<img src="frontend/public/logo.jpg" alt="NexusLearn AI Logo" width="120" style="border-radius: 20px" />
+[![CI Status](https://github.com/NguyenMinhHienn/NexusLearn-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/NguyenMinhHienn/NexusLearn-AI/actions/workflows/ci.yml)
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-nexus--learn--ai.vercel.app-000?style=flat-square&logo=vercel)](https://nexus-learn-ai-omega.vercel.app)
+[![Tech Stack](https://img.shields.io/badge/Stack-React_19_•_Express_•_TypeScript_•_TiDB-61DAFB?style=flat-square&logo=react&logoColor=black)](.)
+[![AI & MCP](https://img.shields.io/badge/AI-Gemini_2.5_•_Official_MCP_•_BM25_RAG-4285F4?style=flat-square&logo=google&logoColor=white)](.)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=flat-square)](./LICENSE)
 
 <br />
 
-**Upload any document → AI instantly builds Knowledge Maps, Flashcards, Quizzes & Personalized Learning Paths.**
+<img src="frontend/public/logo.jpg" alt="NexusLearn AI Logo" width="110" style="border-radius: 20px" />
 
-[Live Demo](https://nexus-learn-ai-omega.vercel.app) · [Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started)
+<br />
+
+**Upload PDF / Markdown / YouTube → AI builds Interactive Knowledge Maps, 3-Tier Lessons, Leitner Flashcards, Quizzes & Live-Streaming RAG Tutoring.**
+
+[Live Demo](https://nexus-learn-ai-omega.vercel.app) · [Key Features](#-features) · [Architecture](#-architecture) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started) · [Testing](#-automated-testing--ci)
 
 </div>
 
 ---
 
+> **⚡ Instant Recruiter / Reviewer Access**: Visit the [Live Demo Login Page](https://nexus-learn-ai-omega.vercel.app/login) and click **"1-Click Recruiter Demo"** to explore a pre-populated workspace (Interactive Knowledge Map, 3-Level System Design Course, Multi-Level Quizzes, Persisted Leitner Flashcards, Streaming RAG Tutor, and MCP + Stripe Sandbox Billing) with zero sign-up required.
+>
+> *Note: Subscription & Stripe billing flows run strictly in **Stripe Test / Sandbox Mode** for full-stack portfolio demonstration — no real commercial payments are processed.*
+
+---
+
 ## 👤 Author
 
-**Nguyen Minh Hien** — Creator, Designer & Full-Stack Developer
-
-> *Independently designed, built, and deployed from concept to production.*
+**Nguyen Minh Hien** — Creator, Product Designer & Full-Stack Engineer
 
 ---
 
 ## ✨ Features
 
-### 🗺️ AI-Powered Knowledge Map
-Automatically extracts concepts from any document and builds an **interactive node-graph mind map** with relationship labels, zoom, pan, and 360° navigation. Powered by React Flow.
+### 🗺️ Interactive Knowledge Graph (`@xyflow/react`)
+Extracts structured concepts across **3 mastery tiers** (`Basic` → `Intermediate` → `Advanced`) and renders a zoomable, pannable node-edge dependency graph so learners visualize how topics connect.
 
-### 📚 Smart Lessons & Flashcards
-AI generates structured lessons across **3 difficulty levels** (Basic → Intermediate → Advanced) and creates flashcard decks optimized for spaced repetition memorization.
+### 🔎 Hybrid BM25 Chunk RAG + Real-Time SSE Streaming Tutor
+- **Sliding-Window Chunking**: Uploaded PDFs, Markdown files, and YouTube transcripts (up to 200,000 characters) are segmented into overlapping `1,200`-character passages (`200`-character overlap) stored in `document_chunks`.
+- **Okapi BM25 Retrieval**: Document chat queries rank verbatim source excerpts (`k1 = 1.5, b = 0.75`, Unicode + Vietnamese accent-insensitive matching & phrase boosting) alongside high-level concept outlines.
+- **Server-Sent Events (`text/event-stream`)**: Streams Gemini tokens live to the browser in real time with source excerpt grounding indicators.
 
-### 🎯 Adaptive Quiz System
-Auto-creates multiple-choice quizzes after each learning level. Tracks scores, streaks, and provides detailed explanations for every answer.
+### 🃏 Persisted 3D Flashcards with Leitner Box Progression
+Generates key-term decks stored in MySQL (`flashcards` table) for cross-device sync, complete with keyboard-driven 3D flip physics and 5-stage **Leitner Box** mastery tracking (`Box #1–#5`).
 
-### 💬 Dual AI Chat System
-- **Global AI Assistant** — System-wide chatbot for general learning questions
-- **Document AI Tutor** — Context-aware tutor embedded in each document, deeply understands the uploaded material
+### 🎯 Multi-Level Adaptive Quizzes & Smart Review Room
+Auto-generates multiple-choice assessments per difficulty tier with detailed answer explanations, accuracy analytics, and a multi-document **Smart Review Room** for cross-material synthesis.
 
-### 📊 Analytics Dashboard
-Beautiful dashboard with **activity heatmap** (GitHub-style), learning streaks, progress tracking per document, and Radar/Donut/Area charts via Recharts.
+### 💳 Agentic SaaS Billing (Official Model Context Protocol + Stripe)
+- **Official MCP Server (`@modelcontextprotocol/sdk`)**: Exposes typed resources (`nexuslearn://billing/plans`) and 4 tools (`list_subscription_plans`, `get_user_billing_status`, `create_upgrade_checkout`, `open_billing_portal`) over both `InMemoryTransport` (in-app Gemini 2.5 agent) and `StdioServerTransport` (`npm run mcp:billing`).
+- **Idempotent Stripe Ledger**: Dual fulfillment via `express.raw()` **HMAC-SHA256 Signed Webhooks** and server-to-server session verification, guarded by `UNIQUE(stripe_session_id)` + `INSERT IGNORE` on `payment_transactions` so user quotas are never credited twice.
 
-### 🔐 Enterprise-Grade Auth
-- JWT authentication with **7-day auto-renewal**
-- **Google OAuth 2.0** one-click sign-in with automatic avatar synchronization
-- Learner persona & goal profiling, password strength analyzer, and Caps Lock detection
-- Role-based access control (User / Admin) + rate limiting & brute-force protection
+### 📊 Analytics Dashboard & Pre-Flight Token Governance
+- **Real SQL Telemetry**: 84-day GitHub-style learning activity heatmap, active streak counter, quiz accuracy, and 5-axis skill radar via Recharts.
+- **Unit-Economics Guardrails**: Pre-flight token estimation (`estimateTextTokens` + `OUTPUT_RESERVE`) blocks over-quota calls before invoking Gemini, paired with automated daily quota sweeps and orphaned-job recovery.
 
-### 💳 Agentic SaaS Billing (Model Context Protocol + Stripe)
-- **Official MCP Server (`@modelcontextprotocol/sdk`)** integrated with **Gemini 2.5** (`InMemoryTransport` & `StdioServerTransport`), enabling the AI Assistant to dynamically discover tools, inspect live token quotas, compare plans, and generate interactive **Stripe Checkout** cards directly in-chat
-- **Stripe Subscriptions** (`Starter Free`, `Scholar Pro`, `Research Max`) with monthly/annual billing cycles and Customer Billing Portal
-- **HMAC-SHA256 Signed Webhooks** + server-to-server session verification backed by an **idempotent MySQL transaction ledger** (`payment_transactions`)
-
-### ⚙️ Admin Control Panel
-Full admin dashboard with:
-- User management (quota, reset usage, delete)
-- AI model switching & monitoring (token consumption per model)
-- System settings configuration
-- Real-time statistics (signups, documents, token usage)
-
-### 🌍 Internationalization & Theming
-- Seamless **Vietnamese / English** switching (i18next)
-- **Dark / Light mode** with system preference detection
-- Premium glassmorphism UI with micro-animations
+### 🔐 Defense-in-Depth Auth & Security
+- **JWT (7-day sliding renewal)** with fail-fast `JWT_SECRET` enforcement in production + **Google OAuth 2.0 (GIS)** one-click sign-in.
+- **Helmet** security headers, strict **CORS** origin whitelisting, XSS HTML stripping, parameterized `mysql2` queries, and route-scoped **rate limiters**.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        PRODUCTION STACK                         │
-├─────────────────┬───────────────────┬───────────────────────────┤
-│                 │                   │                           │
-│   ┌─────────┐   │   ┌───────────┐   │   ┌───────────────────┐   │
-│   │ Vercel  │   │   │  Render   │   │   │  TiDB Serverless  │   │
-│   │  (CDN)  │──▶│   │ (Node.js) │──▶│   │    (MySQL 8.0)    │   │
-│   │Frontend │   │   │  Backend  │   │   │    Cloud DB       │   │
-│   └─────────┘   │   └─────┬─────┘   │   └───────────────────┘   │
-│                 │         │         │                           │
-│   React 19      │     Express       │   9 tables, UTF-8mb4     │
-│   Vite 6        │     TypeScript    │   SSL encrypted           │
-│   Tailwind CSS  │     JWT Auth      │   Auto-scaling            │
-│   Framer Motion │     Helmet/CORS   │                           │
-│                 │         │         │                           │
-│                 │   ┌─────▼─────┐   │                           │
-│                 │   │  Gemini   │   │                           │
-│                 │   │ 2.5 Flash │   │                           │
-│                 │   │   API     │   │                           │
-│                 │   └───────────┘   │                           │
-└─────────────────┴───────────────────┴───────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                               PRODUCTION STACK                                │
+├────────────────────┬──────────────────────────────┬───────────────────────────┤
+│                    │                              │                           │
+│  ┌──────────────┐  │  ┌────────────────────────┐  │  ┌─────────────────────┐  │
+│  │    Vercel    │  │  │   Render Web Service   │  │  │   TiDB Serverless   │  │
+│  │  (Edge CDN)  │──┼─▶│  Node.js + Express TS  │──┼─▶│  MySQL 8.0 (TLS)    │  │
+│  │   Frontend   │  │  │  REST + SSE Streaming  │  │  │  11 Normalized Tbls │  │
+│  └──────────────┘  │  └──────┬──────────┬──────┘  │  └─────────────────────┘  │
+│                    │         │          │         │                           │
+│  • React 19 + Vite │         ▼          ▼         │  • users & quotas         │
+│  • 3D Scroll UI    │  ┌────────────┐ ┌─────────┐  │  • documents & chunks     │
+│  • React Flow      │  │ Gemini 2.5 │ │ Official│  │  • concepts & graph edges │
+│  • Recharts        │  │  Flash +   │◀│   MCP   │  │  • quizzes & flashcards   │
+│  • i18next (VI/EN) │  │  BM25 RAG  │ │ Server  │  │  • user_activity          │
+│                    │  └────────────┘ └────┬────┘  │  • payment_transactions   │
+│                    │                      ▼       │    (UNIQUE idempotent)    │
+│                    │               ┌────────────┐ │                           │
+│                    │               │   Stripe   │ │                           │
+│                    │               │  Checkout  │ │                           │
+│                    │               │ & Webhooks │ │                           │
+│                    │               └────────────┘ │                           │
+└────────────────────┴──────────────────────────────┴───────────────────────────┘
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
-| Technology | Purpose |
+| Layer | Technologies |
 |:--|:--|
-| **React 19** + **Vite 6** | UI framework & build tool |
-| **Tailwind CSS 3** | Utility-first styling |
-| **Framer Motion** | Smooth animations & page transitions |
-| **React Flow** (@xyflow) | Interactive knowledge map graph |
-| **Recharts** | Data visualization (charts & analytics) |
-| **Lucide React** | Modern icon library |
-| **i18next** | Internationalization (VI / EN) |
-| **GSAP** + **tsParticles** | Landing page animations |
-| **Axios** | HTTP client with interceptors |
-
-### Backend
-| Technology | Purpose |
-|:--|:--|
-| **Node.js** + **Express 4** | REST API server |
-| **TypeScript** | Type-safe backend development |
-| **MySQL 8.0** (mysql2) | Relational database |
-| **Google Gemini API** | AI document analysis, chat, quiz generation |
-| **JWT** (jsonwebtoken) | Stateless authentication |
-| **bcryptjs** | Password hashing |
-| **Helmet** + **CORS** | Security headers & origin control |
-| **express-rate-limit** | Brute-force & DDoS protection |
-| **Multer** | File upload handling |
-| **pdf-parse** | PDF text extraction |
-| **google-auth-library** | Google OAuth verification |
-| **@modelcontextprotocol/sdk** | Official MCP Server & Agentic Tool Host |
-| **Stripe SDK** | SaaS Subscriptions, Checkout, Portal & Signed Webhooks |
-
-### Infrastructure
-| Service | Role |
-|:--|:--|
-| **Vercel** | Frontend hosting (Global Edge CDN) |
-| **Render** | Backend hosting (Node.js Web Service) |
-| **TiDB Cloud** | Serverless MySQL database |
-| **Google Cloud** | OAuth credentials & Gemini API |
+| **Frontend** | React 19, TypeScript, Vite 6, Tailwind CSS 3, Framer Motion, Lenis Smooth Scroll, React Flow (`@xyflow/react`), Recharts, i18next (`vi` / `en`), Axios |
+| **Backend** | Node.js 20, Express 4, TypeScript, `@google/generative-ai` (Gemini 2.5), `@modelcontextprotocol/sdk` (MCP), `stripe` SDK, `google-auth-library`, `pdf-parse`, `zod` |
+| **Database** | MySQL 8.0 / TiDB Cloud Serverless (`mysql2/promise`, TLS, automated idempotent startup migrations) |
+| **Security & QA** | Vitest, GitHub Actions CI, Helmet, CORS Whitelist, `bcryptjs`, `jsonwebtoken`, `express-rate-limit` |
 
 ---
 
@@ -148,188 +111,141 @@ Full admin dashboard with:
 
 ```
 NexusLearn-AI/
-├── frontend/                   # React + Vite SPA
+├── .github/workflows/ci.yml        # Automated TypeScript build & Vitest CI pipeline
+├── frontend/                       # React 19 + Vite 6 SPA
 │   ├── src/
-│   │   ├── components/         # Reusable UI components
-│   │   │   ├── ChatBot.tsx         # Global AI chatbot
-│   │   │   ├── ChatWidget.tsx      # Document-specific AI tutor
-│   │   │   ├── ProfileModal.tsx    # User profile management
-│   │   │   └── LanguageSwitcher.tsx
-│   │   ├── contexts/           # React contexts
-│   │   │   ├── AuthContext.tsx     # JWT auth + Google OAuth
-│   │   │   └── ThemeContext.tsx    # Dark/Light mode
-│   │   ├── pages/              # Route pages (14 pages)
-│   │   │   ├── LandingPage.tsx     # Marketing landing page
-│   │   │   ├── DashboardPage.tsx   # User analytics dashboard
-│   │   │   ├── DocumentPage.tsx    # Document detail + lessons
-│   │   │   ├── KnowledgeMapPage.tsx# Interactive mind map
-│   │   │   ├── QuizPage.tsx        # AI-generated quizzes
-│   │   │   ├── FlashcardPage.tsx   # Flashcard study mode
-│   │   │   ├── ReviewRoomPage.tsx  # Multi-doc review chat
-│   │   │   ├── AdminDashboard.tsx  # Admin control panel
-│   │   │   └── ...
-│   │   ├── locales/            # i18n translations (VI + EN)
-│   │   └── styles/             # Global CSS + design tokens
-│   └── vercel.json             # SPA routing config
+│   │   ├── components/
+│   │   │   ├── ChatBot.tsx             # Global MCP-enabled AI Assistant + Checkout cards
+│   │   │   ├── ChatWidget.tsx          # SSE-streaming Document Tutor with BM25 RAG
+│   │   │   ├── GoogleAuthButton.tsx    # Google Identity Services OAuth 2.0 button
+│   │   │   ├── ProfileModal.tsx        # User persona, security & quota modal
+│   │   │   └── QuotaModal.tsx          # Token budget & tier comparison modal
+│   │   ├── layouts/                    # MainLayout & split-screen AuthLayout
+│   │   ├── pages/                      # LandingPage (3D scroll), Dashboard, Document,
+│   │   │                               # KnowledgeMap, Flashcard, Quiz, ReviewRoom,
+│   │   │                               # BillingPage, Login/Register, AdminDashboard
+│   │   └── locales/                    # Full Vietnamese & English translations
+│   └── vercel.json
 │
-├── backend/                    # Express + TypeScript API
+├── backend/                        # Express + TypeScript API & MCP Host
 │   ├── src/
-│   │   ├── routes/
-│   │   │   ├── auth.ts             # Login, register, Google OAuth, profile
-│   │   │   ├── documents.ts        # CRUD, upload, AI analysis, chat
-│   │   │   ├── admin.ts            # User/model/settings management
-│   │   │   └── chat.ts             # Global AI chat
-│   │   ├── middleware/
-│   │   │   ├── auth.ts             # JWT verification
-│   │   │   ├── rateLimiter.ts      # Rate limiting rules
-│   │   │   └── validation.ts       # Input sanitization
-│   │   ├── services/
-│   │   │   ├── geminiAiService.ts  # Gemini API integration
-│   │   │   ├── schemaService.ts    # Auto DB migration
-│   │   │   └── quotaService.ts     # Token quota management
-│   │   └── config/
-│   │       └── db.ts               # MySQL pool (local + cloud + SSL)
-│   └── .env.example
+│   │   ├── config/                     # MySQL TLS pool & fail-fast JWT helper
+│   │   ├── mcp/
+│   │   │   ├── billingMcpServer.ts     # Official MCP Server (Resources + 4 Tools)
+│   │   │   └── mcpChatAgent.ts         # Gemini 2.5 <-> MCP Client multi-hop bridge
+│   │   ├── middleware/                 # Auth, RBAC Admin, Rate Limiters, Sanitization
+│   │   ├── routes/                     # auth, documents (REST + SSE), billing, chat, admin
+│   │   └── services/
+│   │       ├── ragService.ts           # Sliding-window chunker & Okapi BM25 retriever
+│   │       ├── geminiAiService.ts      # Structured JSON extraction & SSE streaming
+│   │       ├── billingService.ts       # Stripe Checkout, Portal & idempotent webhooks
+│   │       ├── demoSeedService.ts      # 1-Click Recruiter Demo & starter course seeder
+│   │       ├── quotaService.ts         # Pre-flight token estimator & daily reset
+│   │       └── schemaService.ts        # Zero-downtime startup schema migrations
+│   └── tests/                          # Vitest unit & MCP protocol integration tests
 │
 └── database/
-    └── schema.sql              # Full database schema (9 tables)
+    └── schema.sql                  # Full 11-table relational schema
 ```
 
 ---
 
-## 🚀 Getting Started
+## ⚡ Key API Endpoints
+
+| Method | Endpoint | Description |
+|:--|:--|:--|
+| `POST` | `/api/auth/register` · `/login` · `/google` | Email/Password & Google OAuth 2.0 authentication |
+| `POST` | `/api/auth/demo` | Provision & sign in to the 1-Click Recruiter Demo workspace |
+| `GET` | `/api/auth/me` | Fetch current user profile, quota & sliding JWT renewal |
+| `POST` | `/api/documents/upload` | Upload PDF/Text/YouTube → async Gemini analysis + BM25 chunk indexing |
+| `GET` | `/api/documents/:id` | Document lessons, Knowledge Graph edges & level progress |
+| `POST` | `/api/documents/:id/chat/stream` | **SSE Streaming** Document Tutor grounded via Okapi BM25 RAG |
+| `GET/POST/PATCH` | `/api/documents/:id/flashcards` | Load, generate & update persisted Leitner-box flashcards |
+| `POST` | `/api/chat/global` | Global AI Assistant connected to the Official MCP Billing Server |
+| `POST` | `/api/billing/checkout` · `/verify-session` | Create & verify Stripe Subscription Checkout sessions |
+| `POST` | `/api/billing/webhook` | Raw-body HMAC-SHA256 verified Stripe Webhook receiver |
+| `GET` | `/api/admin/stats` · `/users` · `/ai-models` | Role-gated Admin telemetry, quota & Gemini model controls |
+
+---
+
+## 🚀 Getting Started Locally
 
 ### Prerequisites
-- **Node.js** v18+ 
-- **MySQL 8.0** (XAMPP, Docker, or Cloud)
-- **Google Gemini API Key** → [Get one here](https://aistudio.google.com/apikey)
+- **Node.js** v20+
+- **MySQL 8.0** (Local, XAMPP, Docker Compose, or TiDB Cloud)
+- **Google Gemini API Key** ([Google AI Studio](https://aistudio.google.com/apikey))
 
 ### 1. Clone & Install
-
 ```bash
 git clone https://github.com/NguyenMinhHienn/NexusLearn-AI.git
 cd NexusLearn-AI
 
-# Install backend
 cd backend && npm install
-
-# Install frontend
 cd ../frontend && npm install
 ```
 
-### 2. Configure Environment
-
-```bash
-# Backend
-cp backend/.env.example backend/.env
-# Edit backend/.env → fill in DB credentials, GEMINI_API_KEY, JWT_SECRET
-
-# Frontend (optional, for Google OAuth)
-cp frontend/.env.example frontend/.env
-# Edit frontend/.env → fill VITE_GOOGLE_CLIENT_ID if needed
+### 2. Configure Environment Variables
+Copy `backend/.env.example` to `backend/.env`:
+```env
+PORT=3001
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=studymate
+JWT_SECRET=replace_with_a_strong_random_secret
+GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+STRIPE_SECRET_KEY=sk_test_your_stripe_sandbox_key
+FRONTEND_URL=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-### 3. Initialize Database
+*(Optional)* Create `frontend/.env` for Google Sign-In:
+```env
+VITE_API_URL=http://localhost:3001
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+```
 
+### 3. Start Database & Dev Servers
 ```bash
-# Using XAMPP/local MySQL
-mysql -u root studymate < database/schema.sql
-
-# Or using Docker
+# Option A: Start MySQL via Docker
 docker-compose up -d
-docker exec -i studymate_db mysql -u root studymate < database/schema.sql
+
+# Run Backend (http://localhost:3001) — tables auto-migrate on startup
+cd backend && npm run dev
+
+# Run Frontend (http://localhost:5173)
+cd frontend && npm run dev
 ```
 
-### 4. Run Development Servers
+---
+
+## 🧪 Automated Testing & CI
+
+Backend business logic, security guards, BM25 RAG retrieval, and the Official MCP Server protocol are verified via **Vitest** and run automatically on every push via **GitHub Actions** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 ```bash
-# From root directory
-npm run dev
+cd backend
+npm test          # Execute Vitest unit & MCP integration suite
+npm run build     # Strict TypeScript compilation check
 
-# Or run separately:
-# Terminal 1: cd backend && npm run dev
-# Terminal 2: cd frontend && npm run dev
+cd ../frontend
+npm run build     # TypeScript project references + Vite production bundle
 ```
-
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:3001`
 
 ---
 
-## 🌐 Production Deployment
+## 🌐 Cloud Deployment Reference
 
-This project is deployed using a **fully serverless, zero-cost architecture**:
-
-| Component | Service | Cost |
+| Service | Role | Required Environment Variables |
 |:--|:--|:--|
-| Frontend | Vercel (Edge CDN) | Free |
-| Backend | Render (Web Service) | Free |
-| Database | TiDB Cloud (Serverless) | Free (5GB) |
-
-See the [Deployment Guide](./docs/deployment.md) for step-by-step instructions.
-
----
-
-## 📊 Database Schema
-
-```
-users ─────────────── documents ─────────── concepts
-  │                      │                    │
-  │                      │                    ├── concept_relationships
-  │                      │                    │
-  ├── user_activity      ├── quiz_questions   └── user_concept_progress
-  │                      │
-  └── user_level_progress
-  
-system_settings (global config)
-```
-
-**9 tables** • UTF-8mb4 • Foreign key cascades • Optimized indexes
-
----
-
-## ⚡ API Endpoints
-
-| Method | Endpoint | Description |
-|:--|:--|:--|
-| `POST` | `/api/auth/register` | Create new account |
-| `POST` | `/api/auth/login` | JWT login |
-| `POST` | `/api/auth/google` | Google OAuth login |
-| `GET` | `/api/auth/me` | Get current user + auto-renew token |
-| `POST` | `/api/documents/upload` | Upload PDF/text/YouTube |
-| `GET` | `/api/documents` | List user's documents |
-| `GET` | `/api/documents/:id` | Get document details + concepts |
-| `POST` | `/api/documents/:id/chat` | Chat with document AI tutor |
-| `GET` | `/api/documents/:id/quiz` | Get AI-generated quiz |
-| `POST` | `/api/documents/review-chat` | Multi-document review chat |
-| `POST` | `/api/chat/global` | Global AI assistant |
-| `GET` | `/api/admin/stats` | Admin dashboard statistics |
-| `GET` | `/api/admin/ai-models` | List available Gemini models |
-| `PUT` | `/api/admin/ai-model` | Switch active AI model |
-| `GET` | `/api/health` | Health check |
-
----
-
-## 🔒 Security
-
-- **Helmet.js** — 11+ HTTP security headers (XSS, clickjacking, MIME sniffing, HSTS)
-- **CORS whitelist** — Only configured origins can access the API
-- **bcrypt** — Salted password hashing (10 rounds)
-- **JWT** — 7-day expiry with automatic renewal when < 2 days remaining
-- **Rate limiting** — Per-route limits (auth: 20/15min, chat: 20/min, upload: 5/10min)
-- **Input validation** — Server-side sanitization on all user inputs
-- **SQL injection protection** — Parameterized queries via mysql2
-
----
-
-## 📜 Statement of Originality
-
-This project is the **sole intellectual property** of **Nguyen Minh Hien**. The entire concept, feature design, system architecture, and user experience flow were independently ideated and planned starting from **mid-2025**.
+| **Vercel** | Frontend SPA (Edge CDN) | `VITE_API_URL`, `VITE_GOOGLE_CLIENT_ID` |
+| **Render** | Backend Node.js API & MCP Host | `NODE_ENV=production`, `JWT_SECRET`, `GEMINI_API_KEY`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL=true`, `GOOGLE_CLIENT_ID`, `STRIPE_SECRET_KEY`, `FRONTEND_URL`, `ALLOWED_ORIGINS` |
+| **TiDB Cloud** | Serverless MySQL 8.0 (TLS) | Auto-migrated on boot by `schemaService.ts` |
 
 ---
 
 ## 📄 License
 
-This project is proprietary software created by **Nguyen Minh Hien**. All rights reserved.
-
-> © 2025-2026 NexusLearn AI by Nguyen Minh Hien. All rights reserved.
+Released under the [MIT License](./LICENSE) · © 2025–2026 **Nguyen Minh Hien**.

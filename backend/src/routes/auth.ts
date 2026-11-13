@@ -9,14 +9,37 @@ import { ensureSchema } from '../services/schemaService';
 import { authLimiter } from '../middleware/rateLimiter';
 import { validateAuthInput, stripHtml } from '../middleware/validation';
 import { OAuth2Client } from 'google-auth-library';
+import { signAuthToken } from '../config/jwt';
+import { ensureRecruiterDemoAccount, seedStarterDocumentForUser } from '../services/demoSeedService';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'nexuslearn_super_secret_key_2026';
 const googleClient = new OAuth2Client();
 
 router.use(async (_req, _res, next) => {
   await ensureSchema();
   next();
+});
+
+// ---------------------------------------------------------------------------
+// 1-Click Recruiter / Guest Demo Sign-In (Pre-seeded interactive workspace)
+// ---------------------------------------------------------------------------
+router.post('/demo', authLimiter, async (_req: Request, res: Response) => {
+  try {
+    const { user, token } = await ensureRecruiterDemoAccount();
+    res.json({
+      message: 'Demo login successful',
+      token,
+      user,
+    });
+  } catch (error: any) {
+    console.error('Demo auth error:', error?.message || error);
+    if (error?.code === 'ECONNREFUSED' || error?.errno === -4078) {
+      return res.status(503).json({
+        message: 'Không thể kết nối MySQL (port 3306 đang tắt). Hãy bật XAMPP / Docker MySQL rồi thử lại.',
+      });
+    }
+    res.status(500).json({ message: 'Không thể khởi tạo tài khoản Demo lúc này' });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -33,7 +56,6 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
       return res.status(500).json({ message: 'Google OAuth is not configured on the server' });
     }
 
-    // Verify the Google ID token
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
       audience: googleClientId,
@@ -44,31 +66,29 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
     }
 
     const { email, name, picture, sub: googleId } = payload;
-    const displayName = name || email!.split('@')[0];
+    const displayName = name || email.split('@')[0];
     const safeAvatar = picture ? String(picture).slice(0, 500) : null;
 
-    // Check if user already exists
     const [existingUsers] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE email = ?', [email]);
 
     let userId: number;
     let userRole: string;
 
     if (existingUsers.length > 0) {
-      // Existing user - login & sync Google avatar if missing
       userId = existingUsers[0].id;
       userRole = existingUsers[0].role;
       if (safeAvatar && !existingUsers[0].avatar_url) {
         await pool.query('UPDATE users SET avatar_url = ? WHERE id = ?', [safeAvatar, userId]);
       }
     } else {
-      // New user - register with Google
       let defaultQuota = 15000;
-      const [settings] = await pool.query<RowDataPacket[]>('SELECT setting_value FROM system_settings WHERE setting_key = "default_token_quota"');
+      const [settings] = await pool.query<RowDataPacket[]>(
+        'SELECT setting_value FROM system_settings WHERE setting_key = "default_token_quota"'
+      );
       if (settings.length > 0 && !isNaN(Number(settings[0].setting_value))) {
         defaultQuota = Number(settings[0].setting_value);
       }
 
-      // Generate a random password (user logs in via Google, not password)
       const salt = await bcrypt.genSalt(10);
       const randomPassword = await bcrypt.hash(googleId + Date.now(), salt);
 
@@ -78,12 +98,16 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
       );
       userId = result.insertId;
       userRole = 'user';
+
+      // Seed 1 interactive showcase course so new Google users don't land on an empty workspace
+      await seedStarterDocumentForUser(userId).catch(err =>
+        console.error('Starter document seed error:', err?.message || err)
+      );
     }
 
-    // Sync quota and generate JWT
     const synced = await syncUserQuota(userId);
     const userData = synced || { id: userId, email, name: displayName, role: userRole, token_quota: 15000, tokens_used: 0 };
-    const token = jwt.sign({ id: userId, email, name: displayName, role: userRole }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signAuthToken({ id: userId, email, name: displayName, role: userRole });
 
     res.json({
       message: 'Google login successful',
@@ -100,6 +124,7 @@ router.post('/google', authLimiter, async (req: Request, res: Response) => {
     res.status(401).json({ message: 'Google authentication failed' });
   }
 });
+
 router.post('/register', authLimiter, validateAuthInput, async (req: Request, res: Response) => {
   try {
     const { name, email, password, occupation, learning_goal } = req.body;
@@ -111,7 +136,9 @@ router.post('/register', authLimiter, validateAuthInput, async (req: Request, re
       return res.status(400).json({ message: 'Email đã được sử dụng' });
     }
     let defaultQuota = 15000;
-    const [settings] = await pool.query<RowDataPacket[]>('SELECT setting_value FROM system_settings WHERE setting_key = "default_token_quota"');
+    const [settings] = await pool.query<RowDataPacket[]>(
+      'SELECT setting_value FROM system_settings WHERE setting_key = "default_token_quota"'
+    );
     if (settings.length > 0 && !isNaN(Number(settings[0].setting_value))) {
       defaultQuota = Number(settings[0].setting_value);
     }
@@ -126,20 +153,25 @@ router.post('/register', authLimiter, validateAuthInput, async (req: Request, re
     );
 
     const userId = result.insertId;
+    await seedStarterDocumentForUser(userId).catch(err =>
+      console.error('Starter document seed error:', err?.message || err)
+    );
+
     const synced = await syncUserQuota(userId);
     const defaultUser = synced || { id: userId, email, name, role: 'user', token_quota: defaultQuota, tokens_used: 0 };
-    const token = jwt.sign({ id: userId, email, name, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signAuthToken({ id: userId, email, name, role: 'user' });
 
     res.status(201).json({
       message: 'Đăng ký thành công',
       token,
-      user: defaultUser
+      user: defaultUser,
     });
   } catch (error) {
     console.error('Lỗi đăng ký:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
 router.post('/login', authLimiter, validateAuthInput, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -159,9 +191,9 @@ router.post('/login', authLimiter, validateAuthInput, async (req: Request, res: 
       return res.status(400).json({ message: 'Email hoặc mật khẩu không đúng' });
     }
     const synced = await syncUserQuota(user.id);
-    const userData = { 
-      id: user.id, 
-      email: user.email, 
+    const userData = {
+      id: user.id,
+      email: user.email,
       name: user.name,
       avatar_url: synced?.avatar_url ?? user.avatar_url ?? null,
       occupation: synced?.occupation ?? user.occupation ?? null,
@@ -173,20 +205,21 @@ router.post('/login', authLimiter, validateAuthInput, async (req: Request, res: 
       token_quota: synced?.token_quota ?? user.token_quota,
       tokens_used: synced?.tokens_used ?? user.tokens_used,
       next_quota_reset: synced?.next_quota_reset ?? null,
-      quota_reset_period: synced?.quota_reset_period
+      quota_reset_period: synced?.quota_reset_period,
     };
-    const token = jwt.sign({ id: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signAuthToken({ id: user.id, email: user.email, name: user.name, role: user.role });
 
     res.json({
       message: 'Đăng nhập thành công',
       token,
-      user: userData
+      user: userData,
     });
   } catch (error) {
     console.error('Lỗi đăng nhập:', error);
     res.status(500).json({ message: 'Lỗi server' });
   }
 });
+
 router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -206,13 +239,13 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
         const decoded = jwt.decode(currentToken) as any;
         if (decoded?.exp) {
           const secondsUntilExpiry = decoded.exp - Math.floor(Date.now() / 1000);
-          // Renew if less than 2 days (172800 seconds) remaining
           if (secondsUntilExpiry < 172800) {
-            newToken = jwt.sign(
-              { id: user.id, email: user.email, name: user.name, role: user.role },
-              JWT_SECRET,
-              { expiresIn: '7d' }
-            );
+            newToken = signAuthToken({
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.role,
+            });
           }
         }
       } catch { /* ignore decode errors */ }
@@ -231,12 +264,10 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
 
     const { name, occupation, learning_goal, currentPassword, newPassword } = req.body;
 
-    // Fetch current user
     const [users] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return res.status(404).json({ message: 'User not found' });
     const user = users[0];
 
-    // Update profile fields if provided
     if (name !== undefined && String(name).trim()) {
       const cleanName = stripHtml(String(name).trim()).slice(0, 100);
       await pool.query('UPDATE users SET name = ? WHERE id = ?', [cleanName, userId]);
@@ -250,7 +281,6 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
       await pool.query('UPDATE users SET learning_goal = ? WHERE id = ?', [cleanGoal, userId]);
     }
 
-    // Update password if provided
     if (currentPassword && newPassword) {
       const isMatch = await bcrypt.compare(currentPassword, user.password);
       if (!isMatch) {
@@ -264,7 +294,6 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
       await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
     }
 
-    // Fetch updated user and return
     const updatedUser = await syncUserQuota(userId);
     res.json({ message: 'Cập nhật hồ sơ thành công', user: updatedUser });
   } catch (error) {
@@ -274,4 +303,3 @@ router.put('/profile', authenticateToken, async (req: AuthRequest, res: Response
 });
 
 export default router;
-

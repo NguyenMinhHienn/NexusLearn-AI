@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   KeyRound,
   X,
+  Sparkles,
+  Server,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -31,8 +33,9 @@ const fadeUp: any = {
 
 export default function LoginPage() {
   usePageTitle('login')
-  const { t } = useTranslation()
-  const { login } = useAuth()
+  const { t, i18n } = useTranslation()
+  const isVi = (i18n.language || 'vi').startsWith('vi')
+  const { login, loginAsDemo } = useAuth()
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
@@ -43,6 +46,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [shakeKey, setShakeKey] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [slowColdStart, setSlowColdStart] = useState(false)
 
   // Forgot password modal state
   const [showForgot, setShowForgot] = useState(false)
@@ -53,6 +58,16 @@ export default function LoginPage() {
     const saved = localStorage.getItem('nexuslearn_saved_email')
     if (saved) setEmail(saved)
   }, [])
+
+  // Show calm Cold-Start banner if free-tier Render server takes > 3.2s to wake up
+  useEffect(() => {
+    if (!loading && !demoLoading) {
+      setSlowColdStart(false)
+      return
+    }
+    const timer = setTimeout(() => setSlowColdStart(true), 3200)
+    return () => clearTimeout(timer)
+  }, [loading, demoLoading])
 
   const isEmailValid = EMAIL_RE.test(email.trim())
 
@@ -65,6 +80,22 @@ export default function LoginPage() {
   const triggerError = (msg: string) => {
     setError(msg)
     setShakeKey((prev) => prev + 1)
+  }
+
+  const handleDemoLogin = async () => {
+    setError('')
+    setDemoLoading(true)
+    try {
+      await loginAsDemo()
+      navigate('/app')
+    } catch (err: any) {
+      triggerError(
+        err.response?.data?.message ||
+          (isVi ? 'Không thể khởi tạo tài khoản Demo lúc này.' : 'Unable to start Demo session right now.')
+      )
+    } finally {
+      setDemoLoading(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,10 +139,40 @@ export default function LoginPage() {
         </p>
       </motion.div>
 
-      {/* Google One-Click Login Always Visible */}
-      <motion.div custom={1} variants={fadeUp}>
+      {/* Google One-Click Login + 1-Click Recruiter Demo */}
+      <motion.div custom={1} variants={fadeUp} className="space-y-2.5">
         <GoogleAuthButton mode="login" onError={triggerError} />
-        <div className="relative flex items-center py-4">
+
+        <button
+          type="button"
+          onClick={handleDemoLogin}
+          disabled={loading || demoLoading}
+          className="group w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-500/35 bg-amber-500/[0.08] hover:bg-amber-500/[0.14] text-left transition-all disabled:opacity-50"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-[var(--accent)] flex items-center justify-center shrink-0">
+              {demoLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-[var(--text-main)] truncate">
+                {isVi
+                  ? 'Trải nghiệm nhanh 1 chạm (Dành cho HR / Recruiter)'
+                  : '1-Click Recruiter Demo (Pre-loaded Workspace)'}
+              </div>
+              <div className="text-[11px] text-[var(--text-muted)] truncate">
+                {isVi
+                  ? 'Có sẵn khóa học System Design, Mindmap, Quiz, RAG Chat & MCP Billing'
+                  : 'Includes live Mindmap, 3-level Lessons, Quizzes, RAG Chat & MCP Billing'}
+              </div>
+            </div>
+          </div>
+          <ArrowRight
+            size={15}
+            className="shrink-0 text-[var(--accent)] transition-transform duration-200 group-hover:translate-x-0.5"
+          />
+        </button>
+
+        <div className="relative flex items-center py-2.5">
           <div className="flex-grow border-t border-[var(--border-color)]" />
           <span className="flex-shrink-0 mx-3 text-[11px] uppercase tracking-wider text-[var(--text-muted)]">
             {t('auth.or_continue_with')}
@@ -119,6 +180,24 @@ export default function LoginPage() {
           <div className="flex-grow border-t border-[var(--border-color)]" />
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {slowColdStart && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="mb-4 flex items-start gap-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-600 dark:text-sky-300"
+          >
+            <Server size={15} className="shrink-0 mt-0.5 animate-pulse" />
+            <span>
+              {isVi
+                ? 'Đang đánh thức máy chủ Render Cloud miễn phí sau thời gian nghỉ (~20–30 giây cho lần truy cập đầu tiên). Vui lòng đợi trong giây lát...'
+                : 'Waking up the free-tier Render cloud server from idle sleep (~20–30s on first request). Almost ready...'}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {error ? (
         <motion.div
@@ -230,7 +309,7 @@ export default function LoginPage() {
         <motion.div custom={5} variants={fadeUp} className="pt-1">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || demoLoading}
             className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[var(--accent)] to-amber-600 hover:brightness-105 active:scale-[0.985] transition-all disabled:opacity-50 shadow-soft"
           >
             {loading ? (

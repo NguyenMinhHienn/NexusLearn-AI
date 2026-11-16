@@ -62,6 +62,19 @@ export async function ensureSchema(): Promise<void> {
         "UPDATE system_settings SET setting_value = 'gemini-2.5-flash' WHERE setting_key = 'ai_model' AND (setting_value = '' OR setting_value LIKE 'gemini-1.%' OR setting_value LIKE 'gemini-2.0%')"
       );
 
+      // One-time switch from 2-RPM free-tier gemini-2.5-pro back to fast, high-quota gemini-2.5-flash
+      const [flashMigrated] = await pool.query<RowDataPacket[]>(
+        "SELECT 1 FROM system_settings WHERE setting_key = '_migration_flash_default_v1'"
+      );
+      if (flashMigrated.length === 0) {
+        await pool.query(
+          "UPDATE system_settings SET setting_value = 'gemini-2.5-flash' WHERE setting_key = 'ai_model' AND setting_value = 'gemini-2.5-pro'"
+        );
+        await pool.query(
+          "INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES ('_migration_flash_default_v1', '1', 'internal')"
+        );
+      }
+
       // 2b. One-time: free plan 5,000 -> 15,000 tokens/day
       const [migrated] = await pool.query<RowDataPacket[]>(
         "SELECT 1 FROM system_settings WHERE setting_key = '_migration_quota_15k'"

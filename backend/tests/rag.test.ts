@@ -59,3 +59,4 @@ describe('Hybrid BM25 RAG Chunking & Retrieval Engine', () => {
     expect(ranked[0].score).toBeGreaterThan(0);
   });
 });
+

@@ -67,3 +67,4 @@ describe('Security, JWT Fail-Fast & Input Sanitization', () => {
     expect(bodyPayload?.code).toBe('INVALID_EMAIL');
   });
 });
+

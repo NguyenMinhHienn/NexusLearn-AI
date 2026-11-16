@@ -56,8 +56,11 @@ export async function ensureSchema(): Promise<void> {
         ('quota_reset_period', '24', 'Thời gian tự động hồi hạn mức (giờ). 24 = làm mới lúc 0h mỗi ngày. Đặt 0 để tắt.'),
         ('ai_model', 'gemini-2.5-flash', 'Model Gemini AI mặc định của hệ thống')
       `);
-      // Clean up legacy unused setting key if empty
+      // Clean up legacy unused setting key if empty & migrate retired Gemini 1.x/2.0 models
       await pool.query("DELETE FROM system_settings WHERE setting_key = 'openai_api_key' AND setting_value = ''");
+      await pool.query(
+        "UPDATE system_settings SET setting_value = 'gemini-2.5-flash' WHERE setting_key = 'ai_model' AND (setting_value = '' OR setting_value LIKE 'gemini-1.%' OR setting_value LIKE 'gemini-2.0%')"
+      );
 
       // 2b. One-time: free plan 5,000 -> 15,000 tokens/day
       const [migrated] = await pool.query<RowDataPacket[]>(

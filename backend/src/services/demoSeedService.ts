@@ -349,3 +349,4 @@ export async function ensureRecruiterDemoAccount() {
 
   return { user, token };
 }
+

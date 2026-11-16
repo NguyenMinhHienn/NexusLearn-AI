@@ -55,3 +55,4 @@ jobs:
 
       - name: TypeScript & Vite production bundle
         run: npm run build
+

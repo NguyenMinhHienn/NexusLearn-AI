@@ -10,11 +10,23 @@ dotenv.config();
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_MODEL = 'gemini-2.5-flash';
+
+function isRetiredGeminiModel(name?: string | null): boolean {
+  if (!name) return true;
+  const lower = name.trim().toLowerCase();
+  return !lower || lower.startsWith('gemini-1.') || lower.startsWith('gemini-2.0');
+}
+
+export function getModelThinkingConfig(modelName: string): Record<string, any> {
+  return modelName.toLowerCase().includes('2.5-flash')
+    ? { thinkingConfig: { thinkingBudget: 0 } }
+    : {};
+}
 
 /**
  * Read the active AI model from system_settings.
- * Cached for 60s so we don't hit the DB on every single AI call.
+ * Automatically upgrades retired Gemini 1.x / 2.0 model names to gemini-2.5-flash.
  */
 let _modelCache: { name: string; ts: number } | null = null;
 const MODEL_CACHE_TTL = 60_000; // 60 seconds
@@ -27,7 +39,13 @@ export async function getActiveModel(): Promise<string> {
     const [rows] = await pool.query<RowDataPacket[]>(
       "SELECT setting_value FROM system_settings WHERE setting_key = 'ai_model'"
     );
-    const name = rows[0]?.setting_value || DEFAULT_MODEL;
+    const rawName = rows[0]?.setting_value?.trim();
+    const name = isRetiredGeminiModel(rawName) ? DEFAULT_MODEL : rawName!;
+    if (rawName && rawName !== name) {
+      pool
+        .query("UPDATE system_settings SET setting_value = ? WHERE setting_key = 'ai_model'", [DEFAULT_MODEL])
+        .catch(() => {});
+    }
     _modelCache = { name, ts: Date.now() };
     return name;
   } catch {
@@ -137,7 +155,7 @@ export const geminiAnalyzeDocument = async (documentId: number, documentText: st
         responseMimeType: "application/json",
         responseSchema: schema,
         maxOutputTokens: 8192,
-        ...NO_THINKING
+        ...getModelThinkingConfig(activeModelName),
       }
     });
     const truncatedText = documentText.length > MAX_ANALYZE_CHARS
@@ -257,7 +275,7 @@ Nhiệm vụ của bạn:
 2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế; khi trích dẫn thông tin từ đoạn trích gốc hãy ghi nhẹ nguồn (ví dụ: theo Đoạn #2 / Excerpt #2) để tăng độ tin cậy.
 3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
 4. YÊU CẦU ĐẶC BIỆT: Phải luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo. Dù học sinh có nói tục, chửi thề, trêu chọc hay hỏi những câu không liên quan, bạn BẮT BUỘC phải giữ thái độ điềm tĩnh, lịch sự từ chối trả lời những nội dung độc hại đó, và khéo léo hướng học sinh quay lại bài học. Tuyệt đối không bao giờ được tức giận hay hùa theo.${langDirective(lang)}`,
-    generationConfig: NO_THINKING,
+    generationConfig: getModelThinkingConfig(activeModelName),
   });
 
   const history = trimHistory(chatHistory).map(msg => ({
@@ -293,7 +311,7 @@ Nhiệm vụ của bạn:
 2. Trả lời thân thiện, dễ hiểu, cặn kẽ bằng ví dụ thực tế; khi trích dẫn thông tin từ đoạn trích gốc hãy ghi nhẹ nguồn (ví dụ: theo Đoạn #2 / Excerpt #2).
 3. BẮT BUỘC SỬ DỤNG Markdown và emoji để bài giảng sinh động.
 4. Luôn giữ thái độ cực kỳ lịch sự và chuẩn mực của một người thầy/cô giáo.${langDirective(lang)}`,
-    generationConfig: NO_THINKING,
+    generationConfig: getModelThinkingConfig(activeModelName),
   });
 
   const history = trimHistory(chatHistory).map(msg => ({
@@ -342,7 +360,7 @@ export const geminiGenerateFlashcards = async (documentContext: string, lang: Ai
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: schema,
-      ...NO_THINKING
+      ...getModelThinkingConfig(activeModelName),
     }
   });
 
@@ -367,7 +385,7 @@ export const geminiGlobalChat = async (message: string, history: { role: 'user' 
       model: activeModelName,
       systemInstruction: `Bạn là Trợ lý ảo AI của NexusLearn - một nền tảng E-learning tiên tiến.
 Hãy hỗ trợ người dùng một cách chuyên nghiệp, ngắn gọn và lịch sự.${langDirective(lang)}`,
-      generationConfig: NO_THINKING,
+      generationConfig: getModelThinkingConfig(activeModelName),
     });
 
     const chatSession = model.startChat({
@@ -413,7 +431,7 @@ NGUYÊN TẮC BẮT BUỘC:
 --- NỘI DUNG TÀI LIỆU ---
 ${contextBlock}
 --- HẾT NỘI DUNG TÀI LIỆU ---`,
-      generationConfig: NO_THINKING,
+      generationConfig: getModelThinkingConfig(activeModelName),
     });
 
     const chatSession = model.startChat({

@@ -42,12 +42,15 @@ router.post('/demo', authLimiter, async (_req: Request, res: Response) => {
   }
 });
 
+const DEFAULT_GOOGLE_CLIENT_ID =
+  '345074677987-eam9n1lhlpe21g8ubfp0pol0jcq2que3.apps.googleusercontent.com';
+
 // ---------------------------------------------------------------------------
 // Google OAuth Sign-In
 // ---------------------------------------------------------------------------
 router.post('/google', authLimiter, async (req: Request, res: Response) => {
   try {
-    const googleClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+    const googleClientId = (process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID).trim();
     const { credential } = req.body;
     if (!credential) {
       return res.status(400).json({ message: 'Missing Google credential' });

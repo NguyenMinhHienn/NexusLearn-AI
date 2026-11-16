@@ -44,7 +44,11 @@ export default function GoogleAuthButton({ mode, onError }: GoogleAuthButtonProp
     theme === 'dark' ||
     (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  const GOOGLE_CLIENT_ID = ((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '').trim()
+  const DEFAULT_GOOGLE_CLIENT_ID =
+    '345074677987-eam9n1lhlpe21g8ubfp0pol0jcq2que3.apps.googleusercontent.com'
+  const GOOGLE_CLIENT_ID = (
+    (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID
+  ).trim()
   const [loading, setLoading] = useState(false)
   const [showSetupModal, setShowSetupModal] = useState(false)
   const [copiedText, setCopiedText] = useState<string | null>(null)

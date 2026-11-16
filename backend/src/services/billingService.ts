@@ -1,8 +1,10 @@
+import crypto from 'crypto';
 import Stripe from 'stripe';
 import pool from '../config/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { ensureSchema } from './schemaService';
 import { syncUserQuota } from './quotaService';
+import { getJwtSecret } from '../config/jwt';
 
 export type PlanId = 'free' | 'pro' | 'unlimited';
 export type BillingCycle = 'monthly' | 'yearly';
@@ -102,11 +104,57 @@ export function isStripeConfigured(): boolean {
   return key.startsWith('sk_test_') || key.startsWith('sk_live_');
 }
 
-export function getStripeMode(): 'test' | 'live' | 'unconfigured' {
+export function getStripeMode(): 'test' | 'live' | 'sandbox_demo' {
   const key = (process.env.STRIPE_SECRET_KEY || '').trim();
   if (key.startsWith('sk_live_')) return 'live';
   if (key.startsWith('sk_test_')) return 'test';
-  return 'unconfigured';
+  return 'sandbox_demo';
+}
+
+function signSandboxSessionId(
+  userId: number,
+  planId: 'pro' | 'unlimited',
+  billingCycle: BillingCycle,
+  source: 'web_pricing' | 'quota_modal' | 'mcp_agent'
+): string {
+  const srcTag = source === 'mcp_agent' ? 'm' : source === 'quota_modal' ? 'q' : 'w';
+  const ts = Math.floor(Date.now() / 1000);
+  const raw = `${userId}.${planId}.${billingCycle}.${srcTag}.${ts}`;
+  const sig = crypto.createHmac('sha256', getJwtSecret()).update(raw).digest('hex').slice(0, 24);
+  return `cs_sim_${userId}_${planId}_${billingCycle}_${srcTag}_${ts}_${sig}`;
+}
+
+function verifySandboxSessionId(sessionId: string): {
+  userId: number;
+  planId: 'pro' | 'unlimited';
+  billingCycle: BillingCycle;
+  source: 'web_pricing' | 'quota_modal' | 'mcp_agent';
+} | null {
+  const parts = sessionId.split('_');
+  // ['cs', 'sim', uid, planId, billingCycle, srcTag, ts, sig]
+  if (parts.length !== 8 || parts[0] !== 'cs' || parts[1] !== 'sim') return null;
+  const [, , uidStr, planRaw, cycleRaw, srcTag, tsStr, sig] = parts;
+  const userId = Number(uidStr);
+  const ts = Number(tsStr);
+  if (!userId || !ts || (planRaw !== 'pro' && planRaw !== 'unlimited')) return null;
+  if (cycleRaw !== 'monthly' && cycleRaw !== 'yearly') return null;
+
+  // Valid within 60 minutes
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - ts) > 3600) return null;
+
+  const expected = crypto
+    .createHmac('sha256', getJwtSecret())
+    .update(`${userId}.${planRaw}.${cycleRaw}.${srcTag}.${ts}`)
+    .digest('hex')
+    .slice(0, 24);
+
+  if (sig.length !== expected.length) return null;
+  const ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  if (!ok) return null;
+
+  const source = srcTag === 'm' ? 'mcp_agent' : srcTag === 'q' ? 'quota_modal' : 'web_pricing';
+  return { userId, planId: planRaw, billingCycle: cycleRaw, source };
 }
 
 export function getStripeClient(): Stripe | null {
@@ -150,13 +198,6 @@ export async function createStripeCheckoutSession(params: CreateCheckoutParams) 
     throw new Error('Invalid subscription plan selected');
   }
 
-  const stripe = getStripeClient();
-  if (!stripe) {
-    const err: any = new Error('Stripe secret key is not configured yet');
-    err.code = 'STRIPE_NOT_CONFIGURED';
-    throw err;
-  }
-
   const [users] = await pool.query<RowDataPacket[]>(
     'SELECT id, email, name, stripe_customer_id FROM users WHERE id = ?',
     [userId]
@@ -166,6 +207,23 @@ export async function createStripeCheckoutSession(params: CreateCheckoutParams) 
   }
 
   const user = users[0];
+  const unitAmount = billingCycle === 'yearly' ? plan.yearlyCents : plan.monthlyCents;
+  const baseUrl = resolveSafeFrontendOrigin(origin);
+
+  const stripe = getStripeClient();
+  if (!stripe) {
+    // Built-in HMAC-signed CV Portfolio Sandbox Checkout when STRIPE_SECRET_KEY is not set on cloud host
+    const simSessionId = signSandboxSessionId(user.id, planId, billingCycle, source);
+    return {
+      sessionId: simSessionId,
+      checkoutUrl: `${baseUrl}/app/billing?session_id=${encodeURIComponent(simSessionId)}`,
+      plan,
+      billingCycle,
+      amountUsd: unitAmount / 100,
+      mode: getStripeMode(),
+    };
+  }
+
   let customerId: string | undefined = user.stripe_customer_id || undefined;
 
   // Verify or create Stripe customer
@@ -188,9 +246,7 @@ export async function createStripeCheckoutSession(params: CreateCheckoutParams) 
     await pool.query('UPDATE users SET stripe_customer_id = ? WHERE id = ?', [customerId, user.id]);
   }
 
-  const unitAmount = billingCycle === 'yearly' ? plan.yearlyCents : plan.monthlyCents;
   const interval: 'month' | 'year' = billingCycle === 'yearly' ? 'year' : 'month';
-  const baseUrl = resolveSafeFrontendOrigin(origin);
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
@@ -304,6 +360,41 @@ export async function fulfillCheckoutSession(
 }
 
 export async function verifyCheckoutSessionForUser(sessionId: string, userId: number) {
+  if (sessionId.startsWith('cs_sim_')) {
+    const verifiedSim = verifySandboxSessionId(sessionId);
+    if (!verifiedSim) {
+      const err: any = new Error('Invalid or expired sandbox checkout session');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (verifiedSim.userId !== userId) {
+      const err: any = new Error('Session does not belong to current user');
+      err.statusCode = 403;
+      throw err;
+    }
+    const plan = SUBSCRIPTION_PLANS[verifiedSim.planId];
+    const amountTotal = verifiedSim.billingCycle === 'yearly' ? plan.yearlyCents : plan.monthlyCents;
+    const simulatedSession = {
+      id: sessionId,
+      payment_status: 'paid',
+      status: 'complete',
+      client_reference_id: String(userId),
+      amount_total: amountTotal,
+      currency: 'usd',
+      customer: `cus_sandbox_${userId}`,
+      subscription: `sub_sandbox_${userId}_${verifiedSim.planId}`,
+      payment_intent: `pi_sandbox_${Date.now()}`,
+      metadata: {
+        user_id: String(userId),
+        plan_id: verifiedSim.planId,
+        billing_cycle: verifiedSim.billingCycle,
+        source: verifiedSim.source,
+      },
+    } as unknown as Stripe.Checkout.Session;
+
+    return fulfillCheckoutSession(simulatedSession, 'stripe_verify');
+  }
+
   const stripe = getStripeClient();
   if (!stripe) {
     const err: any = new Error('Stripe is not configured');
@@ -345,11 +436,10 @@ export async function handleSubscriptionDeleted(subscription: Stripe.Subscriptio
 }
 
 export async function createStripePortalUrl(userId: number, origin?: string): Promise<string> {
+  const baseUrl = resolveSafeFrontendOrigin(origin);
   const stripe = getStripeClient();
   if (!stripe) {
-    const err: any = new Error('Stripe is not configured');
-    err.code = 'STRIPE_NOT_CONFIGURED';
-    throw err;
+    return `${baseUrl}/app/billing`;
   }
 
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -357,11 +447,10 @@ export async function createStripePortalUrl(userId: number, origin?: string): Pr
     [userId]
   );
   const customerId = rows[0]?.stripe_customer_id;
-  if (!customerId) {
-    throw new Error('No active Stripe customer found for this account');
+  if (!customerId || String(customerId).startsWith('cus_sandbox_')) {
+    return `${baseUrl}/app/billing`;
   }
 
-  const baseUrl = resolveSafeFrontendOrigin(origin);
   const portal = await stripe.billingPortal.sessions.create({
     customer: customerId,
     return_url: `${baseUrl}/app/billing`,

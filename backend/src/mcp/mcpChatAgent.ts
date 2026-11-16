@@ -2,9 +2,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import { createBillingMcpServer, McpBillingContext } from './billingMcpServer';
-import { genAI, getActiveModel, AiLang } from '../services/geminiAiService';
+import { genAI, getActiveModel, getModelThinkingConfig, DEFAULT_MODEL, AiLang } from '../services/geminiAiService';
 
-const NO_THINKING = { thinkingConfig: { thinkingBudget: 0 } } as any;
 const MAX_HISTORY_TURNS = 10;
 
 function mapJsonTypeToGemini(type?: string): SchemaType {
@@ -104,35 +103,49 @@ export async function runMcpGlobalChat(
       };
     });
 
-    const activeModelName = await getActiveModel();
+    let activeModelName = await getActiveModel();
     const langInstruction =
       lang === 'en'
         ? 'IMPORTANT: Always respond in ENGLISH.'
         : 'QUAN TRỌNG: Luôn trả lời bằng TIẾNG VIỆT.';
 
-    const model = genAI.getGenerativeModel({
-      model: activeModelName,
-      systemInstruction: `Bạn là Trợ lý AI thông minh của NexusLearn AI — nền tảng E-learning hiện đại được kết nối trực tiếp với hệ thống quản lý gói cước qua chuẩn Model Context Protocol (MCP).
+    const buildSession = (modelName: string) => {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: `Bạn là Trợ lý AI thông minh của NexusLearn AI — nền tảng E-learning hiện đại được kết nối trực tiếp với hệ thống quản lý gói cước qua chuẩn Model Context Protocol (MCP).
 - Khi người dùng hỏi về hạn mức AI token còn lại, gói hiện tại, bảng giá các gói (Free / Scholar Pro / Research Max), nâng cấp tài khoản, mua gói Pro, hoặc quản lý hóa đơn Stripe: HÃY GỌI NGAY các công cụ MCP tương ứng (\`get_user_billing_status\`, \`list_subscription_plans\`, \`create_upgrade_checkout\`, \`open_billing_portal\`).
 - Tuyệt đối KHÔNG tự bịa số dư token hay tự bịa đường link thanh toán; luôn lấy dữ liệu thực từ MCP Tool.
-- Khi đã tạo phiên thanh toán (\`checkout_ready\`), hãy thông báo ngắn gọn, lịch sự để người dùng bấm vào Thẻ Thanh Toán Stripe hiển thị ngay bên dưới tin nhắn (không cần dán URL dài ngoằng nếu không cần thiết).
+- Khi đã tạo phiên thanh toán (\`checkout_ready\`), hãy thông báo ngắn gọn, lịch sự để người dùng bấm vào Thẻ Thanh Toán hiển thị ngay bên dưới tin nhắn (không cần dán URL dài ngoằng nếu không cần thiết).
 - Với các câu hỏi học tập thông thường, hãy hỗ trợ súc tích, rõ ràng, thân thiện.
 ${langInstruction}`,
-      tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
-      generationConfig: NO_THINKING,
-    });
+        tools: functionDeclarations.length > 0 ? [{ functionDeclarations }] : undefined,
+        generationConfig: getModelThinkingConfig(modelName),
+      });
 
-    const trimmed = history.slice(-MAX_HISTORY_TURNS);
-    while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
+      const trimmed = history.slice(-MAX_HISTORY_TURNS);
+      while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
 
-    const chatSession = model.startChat({
-      history: trimmed.map((m) => ({
-        role: m.role,
-        parts: [{ text: m.text }],
-      })),
-    });
+      return model.startChat({
+        history: trimmed.map((m) => ({
+          role: m.role,
+          parts: [{ text: m.text }],
+        })),
+      });
+    };
 
-    let result = await chatSession.sendMessage([{ text: message }]);
+    let chatSession = buildSession(activeModelName);
+    let result;
+    try {
+      result = await chatSession.sendMessage([{ text: message }]);
+    } catch (firstErr: any) {
+      if (activeModelName !== DEFAULT_MODEL) {
+        activeModelName = DEFAULT_MODEL;
+        chatSession = buildSession(DEFAULT_MODEL);
+        result = await chatSession.sendMessage([{ text: message }]);
+      } else {
+        throw firstErr;
+      }
+    }
     let response = result.response;
 
     // 2. Agentic MCP Tool-Calling Loop (up to 3 hops)

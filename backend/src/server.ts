@@ -14,6 +14,8 @@ import { ensureSchema, recoverStuckDocuments } from './services/schemaService';
 import { resetExpiredQuotas } from './services/quotaService';
 import { globalLimiter } from './middleware/rateLimiter';
 import { getJwtSecret } from './config/jwt';
+import { apiKey, getActiveModel } from './services/geminiAiService';
+import { getStripeMode } from './services/billingService';
 
 dotenv.config();
 
@@ -53,8 +55,16 @@ app.use('/api/admin', authenticateToken, adminRoutes);
 app.use('/api/chat', chatRoutes);
 
 // Health check (also used by frontend cold-start warmup probe)
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', message: 'NexusLearn API is running', timestamp: new Date().toISOString() });
+app.get('/api/health', async (_req, res) => {
+  const activeModel = await getActiveModel().catch(() => 'gemini-2.5-flash');
+  res.json({
+    status: 'ok',
+    message: 'NexusLearn API is running',
+    aiConfigured: Boolean(apiKey),
+    activeModel,
+    stripeMode: getStripeMode(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Serve frontend static build if available

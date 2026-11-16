@@ -42,3 +42,4 @@ export function signAuthToken(payload: JwtUserPayload, expiresIn: SignOptions['e
 export function verifyAuthToken(token: string): JwtUserPayload {
   return jwt.verify(token, getJwtSecret()) as JwtUserPayload;
 }
+
